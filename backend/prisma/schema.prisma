@@ -1,0 +1,243 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────────────────────��─
+// Enums
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+}
+
+enum SensorStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+// ─────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid())
+  username      String?  @unique
+  firstName     String?
+  lastName      String?
+  picture       String?
+  emailVerified Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  email         String   @unique
+  password      String
+  role          UserRole @default(USER)
+  createdAt     DateTime @default(now())
+
+  devices     Device[]
+  automations Automation[]
+  alerts      Alert[]
+
+  @@index([email])
+}
+
+model OTP {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  email     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([code])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────
+// Devices (ESP32)
+// ─────────────────────────────────────────────
+
+model Device {
+  id              String       @id @default(uuid())
+  userId          String
+  name            String
+  macAddress      String       @unique
+  ipAddress       String?
+  status          DeviceStatus @default(OFFLINE)
+  firmwareVersion String?
+  lastSeenAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sensors   Sensor[]
+  actuators Actuator[]
+
+  @@index([userId])
+  @@index([macAddress])
+}
+
+// ─────────────────────────────────────────────
+// Sensor registry — catalogue of supported types
+// ─────────────────────────────────────────────
+
+model SensorTypeRegistry {
+  id          String  @id @default(uuid())
+  /// Unique key used by firmware and API: "DHT22", "PIR", "DS18B20", "LDR", etc.
+  type        String  @unique
+  name        String
+  description String?
+  /// JSON array describing output fields: [{field:"temperature", unit:"°C", dataType:"float"}, ...]
+  dataFields  Json
+  /// Category for grouping in the app: "climate", "motion", "light", "distance", etc.
+  category    String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  sensors Sensor[]
+
+  @@index([type])
+  @@index([category])
+}
+
+// ─────────────────────────────────────────────
+// Sensors — instances configured on a device
+// ─────────────────────────────────────────────
+
+model Sensor {
+  id           String       @id @default(uuid())
+  deviceId     String
+  sensorTypeId String
+  name         String
+  /// GPIO pin on the ESP32
+  pin          Int
+  status       SensorStatus @default(ACTIVE)
+  /// Extra runtime config: calibration offsets, sampling interval, etc.
+  config       Json?
+  lastReadAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  device     Device             @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  sensorType SensorTypeRegistry @relation(fields: [sensorTypeId], references: [id])
+  data       SensorData[]
+  automations Automation[]
+  alerts     Alert[]
+
+  /// One sensor per GPIO pin per device
+  @@unique([deviceId, pin])
+  @@index([deviceId])
+  @@index([sensorTypeId])
+}
+
+// ─────────────────────────────────────────────
+// Sensor data — time-series readings
+// ─────────────────────────────────────────────
+
+model SensorData {
+  id         String   @id @default(uuid())
+  sensorId   String
+  /// Flexible payload: {temperature:25.3, humidity:60} or {motion:true} etc.
+  data       Json
+  recordedAt DateTime @default(now())
+
+  sensor Sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+
+  @@index([sensorId, recordedAt])
+  @@index([recordedAt])
+}
+
+// ─────────────────────────────────────────────
+// Actuators
+// ─────────────────────────────────────────────
+
+model Actuator {
+  id        String   @id @default(uuid())
+  deviceId  String
+  /// "relay", "led", "fan", "servo", etc.
+  type      String
+  name      String
+  pin       Int
+  /// Last known state: "on", "off" — or numeric string for PWM
+  state     String   @default("off")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  device      Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  automations Automation[]
+
+  /// One actuator per GPIO pin per device
+  @@unique([deviceId, pin])
+  @@index([deviceId])
+}
+
+// ─────────────────────────────────────────────
+// Automations — IF sensor condition THEN action
+// ─────────────────────────────────────────────
+
+model Automation {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  /// Trigger definition: {sensorId, field, operator (">"|"<"|">="|"<="|"=="|"!="), value}
+  trigger     Json
+  /// Action definition: {actuatorId, command ("on"|"off"|"toggle")} or {type:"notification", message}
+  action      Json
+  /// Denormalized FKs for easy querying — also present inside trigger/action JSON
+  sensorId    String?
+  actuatorId  String?
+  lastTriggeredAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sensor   Sensor?   @relation(fields: [sensorId], references: [id], onDelete: SetNull)
+  actuator Actuator? @relation(fields: [actuatorId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([sensorId])
+}
+
+// ─────────────────────────────────────────────
+// Alerts — push notification when threshold hit
+// ─────────────────────────────────────────────
+
+model Alert {
+  id          String   @id @default(uuid())
+  userId      String
+  sensorId    String
+  name        String
+  /// Condition: {field, operator (">"|"<"|">="|"<="|"=="|"!="), value}
+  condition   Json
+  isActive    Boolean  @default(true)
+  /// Optional override message; defaults to generated message if null
+  message     String?
+  lastTriggeredAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sensor Sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sensorId])
+  @@index([isActive])
+}
