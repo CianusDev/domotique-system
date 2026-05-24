@@ -13,7 +13,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> checkAuth() async {
     state = const AuthState.loading();
     try {
-      final hasToken = await AuthStorage.hasToken();
+      // Timeout guards against FlutterSecureStorage keystore hang on first run.
+      final hasToken = await AuthStorage.hasToken().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => false,
+      );
       if (!hasToken) {
         state = const AuthState.unauthenticated();
         return;
@@ -21,7 +25,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = await _repo.profile();
       state = AuthState.authenticated(user);
     } catch (_) {
-      await AuthStorage.clearToken();
+      await AuthStorage.clearToken().catchError((_) {});
       state = const AuthState.unauthenticated();
     }
   }

@@ -8,7 +8,10 @@ class AuthStorage {
 
   static const _tokenKey = 'auth_token';
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      resetOnError: true, // auto-reset keystore on corruption/hang
+    ),
   );
 
   static Future<void> saveToken(String token) =>
