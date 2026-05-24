@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/ble_constants.dart';
 import '../../../shared/utils/dio_error_helper.dart';
@@ -70,6 +71,35 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
     });
 
     try {
+      // Request runtime permissions before scanning
+      final statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.locationWhenInUse, // required on Android < 12
+      ].request();
+
+      final denied = statuses.entries
+          .where((e) =>
+              e.value.isDenied || e.value.isPermanentlyDenied)
+          .toList();
+
+      if (denied.isNotEmpty) {
+        final permanent =
+            denied.any((e) => e.value.isPermanentlyDenied);
+        if (permanent && mounted) {
+          setState(() => _scanning = false);
+          _showPermissionDialog();
+          return;
+        }
+        throw Exception('Permissions Bluetooth refusées');
+      }
+
+      // Check Bluetooth adapter is on
+      if (await FlutterBluePlus.adapterState.first !=
+          BluetoothAdapterState.on) {
+        await FlutterBluePlus.turnOn();
+      }
+
       await FlutterBluePlus.startScan(
         withNames: [BleConstants.deviceNamePrefix],
         timeout: const Duration(seconds: 10),
@@ -174,6 +204,32 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
 
   void _setStatus(String msg) {
     if (mounted) setState(() => _provisionStatus = msg);
+  }
+
+  void _showPermissionDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Permissions requises'),
+        content: const Text(
+          'Les permissions Bluetooth sont bloquées.\n'
+          'Activez-les dans les paramètres de l\'application.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () {
+              openAppSettings();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Paramètres'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── UI ───────────────────────────────────────────────────────────────────
