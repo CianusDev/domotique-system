@@ -68,6 +68,17 @@ class AuthRepository {
       data: {'email': email},
     );
   }
+
+  /// Resets password using UUID token from email link.
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    await _dio.post(ApiConstants.resetPassword, data: {
+      'token': token,
+      'newPassword': newPassword,
+    });
+  }
 }
 
 final authRepositoryProvider = Provider<AuthRepository>(

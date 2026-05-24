@@ -145,7 +145,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               ),
         ),
         const SizedBox(height: 32),
-        FilledButton.tonal(
+        FilledButton(
+          onPressed: () => context.go('/reset-password'),
+          child: const Text("Entrer le token reçu"),
+        ),
+        const SizedBox(height: 12),
+        TextButton(
           onPressed: () => context.go('/login'),
           child: const Text('Retour à la connexion'),
         ),

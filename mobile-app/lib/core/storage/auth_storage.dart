@@ -8,9 +8,11 @@ class AuthStorage {
 
   static const _tokenKey = 'auth_token';
   static const _storage = FlutterSecureStorage(
+    // encryptedSharedPreferences requires device PIN/biometric enrolled.
+    // Fails on emulators and unsecured devices. Use direct Keystore (default).
     aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-      resetOnError: true, // auto-reset keystore on corruption/hang
+      encryptedSharedPreferences: false,
+      resetOnError: true,
     ),
   );
 

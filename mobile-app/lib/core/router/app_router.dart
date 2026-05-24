@@ -6,6 +6,7 @@ import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
+import '../../features/auth/presentation/reset_password_screen.dart';
 import '../../features/auth/presentation/verify_email_screen.dart';
 import '../../features/devices/domain/devices_notifier.dart';
 import '../../features/devices/presentation/devices_screen.dart';
@@ -20,9 +21,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authNotifierProvider);
 
-      if (authState.isInitial || authState.isLoading) {
+      // Only redirect to splash before first auth check.
+      // During loading (login/register/verify ops), stay on current page
+      // so the screen can show its own loading UI.
+      if (authState.isInitial) {
         return state.matchedLocation == '/splash' ? null : '/splash';
       }
+      if (authState.isLoading) return null;
 
       final isAuth = authState.isAuthenticated;
       final loc = state.matchedLocation;
@@ -32,6 +37,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/register',
         '/verify-email',
         '/forgot-password',
+        '/reset-password',
         '/splash',
       ];
       final isAuthPage = authPages.any((p) => loc.startsWith(p));
@@ -66,6 +72,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/forgot-password',
         builder: (_, state) => ForgotPasswordScreen(
           initialEmail: state.extra as String? ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (_, state) => ResetPasswordScreen(
+          token: state.extra as String? ?? '',
         ),
       ),
 
@@ -190,9 +202,19 @@ class _SplashScreenState extends ConsumerState<_SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () => ref.read(authNotifierProvider.notifier).checkAuth(),
-    );
+    Future.microtask(() async {
+      await ref.read(authNotifierProvider.notifier).checkAuth();
+      // Navigate imperatively — avoids GoRouter refreshListenable race condition
+      // where notifyListeners() fires before GoRouter attaches its listener.
+      if (mounted) {
+        final authState = ref.read(authNotifierProvider);
+        if (authState.isAuthenticated) {
+          context.go('/devices');
+        } else {
+          context.go('/login');
+        }
+      }
+    });
   }
 
   @override
