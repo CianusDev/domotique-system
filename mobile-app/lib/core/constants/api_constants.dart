@@ -4,6 +4,11 @@ class ApiConstants {
     defaultValue: 'http://10.0.2.2:5000/api',
   );
 
+  static const String mqttBroker = String.fromEnvironment(
+    'MQTT_BROKER',
+    defaultValue: '10.0.2.2',
+  );
+
   // Auth
   static const String register = '/auth/register';
   static const String login = '/auth/login';
