@@ -101,7 +101,7 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
       }
 
       await FlutterBluePlus.startScan(
-        withNames: [BleConstants.deviceNamePrefix],
+        withServices: [Guid(BleConstants.serviceUuid)],
         timeout: const Duration(seconds: 10),
       );
 
@@ -113,7 +113,9 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
             ..addAll(
               results.where((r) =>
                   r.device.platformName
-                      .startsWith(BleConstants.deviceNamePrefix)),
+                      .startsWith(BleConstants.deviceNamePrefix) ||
+                  r.advertisementData.serviceUuids.any((u) =>
+                      u.str128.toLowerCase() == BleConstants.serviceUuid)),
             );
         });
       });
