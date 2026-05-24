@@ -71,21 +71,18 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
     });
 
     try {
-      // Request runtime permissions before scanning
-      final statuses = await [
+      // Request Bluetooth permissions (required on all versions)
+      final btStatuses = await [
         Permission.bluetoothScan,
         Permission.bluetoothConnect,
-        Permission.locationWhenInUse, // required on Android < 12
       ].request();
 
-      final denied = statuses.entries
-          .where((e) =>
-              e.value.isDenied || e.value.isPermanentlyDenied)
+      final btDenied = btStatuses.entries
+          .where((e) => e.value.isDenied || e.value.isPermanentlyDenied)
           .toList();
 
-      if (denied.isNotEmpty) {
-        final permanent =
-            denied.any((e) => e.value.isPermanentlyDenied);
+      if (btDenied.isNotEmpty) {
+        final permanent = btDenied.any((e) => e.value.isPermanentlyDenied);
         if (permanent && mounted) {
           setState(() => _scanning = false);
           _showPermissionDialog();
@@ -93,6 +90,9 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
         }
         throw Exception('Permissions Bluetooth refusées');
       }
+
+      // Location only needed on Android < 12 (API < 31); ignore denial on newer
+      await Permission.locationWhenInUse.request();
 
       // Check Bluetooth adapter is on
       if (await FlutterBluePlus.adapterState.first !=
