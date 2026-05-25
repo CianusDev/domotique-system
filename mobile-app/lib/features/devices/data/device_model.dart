@@ -40,7 +40,7 @@ class DeviceModel {
   }
 
   static DeviceStatus _parseStatus(String? s) {
-    return switch (s) {
+    return switch (s?.toLowerCase()) {
       'online' => DeviceStatus.online,
       'offline' => DeviceStatus.offline,
       _ => DeviceStatus.unknown,
