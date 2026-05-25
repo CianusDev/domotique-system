@@ -25,6 +25,10 @@ public:
   // Device identity
   String deviceId; // UUID assigned by backend
 
+  // Last boot error (cleared after first BLE scan response)
+  // Values: "" | "captive_portal"
+  String lastError;
+
   bool isProvisioned() const {
     return !wifiSsid.isEmpty() && !deviceId.isEmpty();
   }

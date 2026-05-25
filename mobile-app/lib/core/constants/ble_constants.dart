@@ -7,4 +7,13 @@ class BleConstants {
 
   /// ESP32 advertises with this prefix
   static const String deviceNamePrefix = 'Domotique-';
+
+  // ── BLE commands (app → ESP32 via RX char) ────────────────────────────────
+  /// Request WiFi scan. ESP32 responds on TX: {"type":"wifi_list","networks":[…]}
+  static const String cmdScanWifi = '{"cmd":"scan_wifi"}';
+
+  // ── BLE response types (ESP32 → app via TX char) ──────────────────────────
+  /// wifi_list response: {"type":"wifi_list","networks":[{"ssid":"…","rssi":-65,"auth":3}]}
+  /// auth=0 → OPEN, auth≥1 → secured (WEP/WPA/WPA2/WPA3)
+  static const String responseWifiList = 'wifi_list';
 }

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
+#include <HTTPClient.h>
 
 #include "config/config.h"
 #include "ble/ble_provisioning.h"
@@ -9,6 +10,30 @@
 
 static SensorManager sensorManager;
 static BleProvisioning bleProvisioning;
+
+// ──────────────────────────────────────────────
+// Connectivity check (captive portal detection)
+// ──────────────────────────────────────────────
+
+/// Returns true if behind a captive portal (no real internet).
+/// Hits Google's 204 endpoint — expects HTTP 204, anything else = portal.
+static bool hasCaptivePortal() {
+  HTTPClient http;
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+  http.setTimeout(5000);
+
+  if (!http.begin("http://connectivitycheck.gstatic.com/generate_204")) {
+    http.end();
+    Serial.println("[WiFi] Connectivity check: failed to init HTTP");
+    return true; // assume portal if we can't even reach it
+  }
+
+  int code = http.GET();
+  http.end();
+  Serial.printf("[WiFi] Connectivity check: HTTP %d\n", code);
+
+  return code != HTTP_CODE_NO_CONTENT; // 204 = internet OK = no portal
+}
 
 // ──────────────────────────────────────────────
 // WiFi
@@ -85,14 +110,24 @@ void setup() {
   connectWifi();
 
   if (WiFi.status() == WL_CONNECTED) {
-    setupOTA();
+    if (hasCaptivePortal()) {
+      Serial.println("[WiFi] Captive portal detected — falling back to BLE mode");
+      cfg.lastError = "captive_portal";
+      cfg.save();
+      bleProvisioning.begin("Domotique-" + WiFi.macAddress().substring(9));
+      return; // loop() will handle BLE + update()
+    }
 
+    setupOTA();
     MqttClient::instance().begin(cfg.deviceId, cfg.mqttBroker, cfg.mqttPort);
     setupMqttCallbacks();
   }
 }
 
 void loop() {
+  // BLE mode: process deferred commands (e.g. WiFi scan) on the main task
+  bleProvisioning.update();
+
   if (WiFi.status() == WL_CONNECTED) {
     ArduinoOTA.handle();
     MqttClient::instance().loop();
