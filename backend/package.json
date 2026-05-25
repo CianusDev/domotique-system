@@ -32,8 +32,10 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.1.24",
     "@nestjs/swagger": "^11.2.5",
     "@nestjs/throttler": "^6.5.0",
+    "@nestjs/websockets": "^11.1.24",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "@types/bcrypt": "^6.0.0",
@@ -45,6 +47,7 @@
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
+    "cookie": "^1.1.1",
     "cookie-parser": "^1.4.7",
     "csrf-csrf": "^4.0.3",
     "dotenv": "^17.2.3",
@@ -56,7 +59,8 @@
     "pg": "^8.17.1",
     "prisma": "^7.2.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -64,6 +68,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@types/cookie": "^1.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",

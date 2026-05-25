@@ -17,6 +17,7 @@ import { SensorsModule } from './sensors/sensors.module';
 import { ActuatorsModule } from './actuators/actuators.module';
 import { AutomationsModule } from './automations/automations.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { GatewayModule } from './gateway/gateway.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { AlertsModule } from './alerts/alerts.module';
     ActuatorsModule,
     AutomationsModule,
     AlertsModule,
+    GatewayModule,
   ],
   controllers: [AppController],
   providers: [

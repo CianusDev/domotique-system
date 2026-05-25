@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage/auth_storage.dart';
+import '../../../core/websocket/socket_service.dart';
 import '../../../shared/utils/dio_error_helper.dart';
 import '../data/auth_repository.dart';
 import 'auth_state.dart';
@@ -24,6 +25,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
       final user = await _repo.profile();
       state = AuthState.authenticated(user);
+      SocketService.instance.connect(); // reconnect WebSocket on app restore
     } catch (_) {
       await AuthStorage.clearToken().catchError((_) {});
       state = const AuthState.unauthenticated();
@@ -35,6 +37,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final user = await _repo.login(email, password);
       state = AuthState.authenticated(user);
+      SocketService.instance.connect(); // open WebSocket after login
     } catch (e) {
       state = state.withError(extractDioError(e));
     }
@@ -71,6 +74,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final user = await _repo.verifyEmail(email, code);
       state = AuthState.authenticated(user);
+      SocketService.instance.connect(); // open WebSocket after email verify
     } catch (e) {
       state = state.withError(extractDioError(e));
     }
@@ -82,6 +86,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {
       // logout best-effort
     } finally {
+      SocketService.instance.disconnect(); // close WebSocket before clearing token
       await AuthStorage.clearToken();
       state = const AuthState.unauthenticated();
     }

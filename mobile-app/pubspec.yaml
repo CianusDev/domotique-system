@@ -58,6 +58,9 @@ dependencies:
   # Navigation
   go_router: ^15.1.2
 
+  # WebSocket (real-time device status, sensor data, actuator state)
+  socket_io_client: ^3.0.2
+
   # Utils
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0

@@ -1,13 +1,40 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/websocket/socket_service.dart';
 import '../../../shared/utils/dio_error_helper.dart';
 import '../data/device_model.dart';
 import '../data/device_repository.dart';
 
-class DevicesNotifier
-    extends StateNotifier<AsyncValue<List<DeviceModel>>> {
-  DevicesNotifier(this._repo) : super(const AsyncValue.loading());
+class DevicesNotifier extends StateNotifier<AsyncValue<List<DeviceModel>>> {
+  DevicesNotifier(this._repo) : super(const AsyncValue.loading()) {
+    _subscribeToSocket();
+  }
 
   final DeviceRepository _repo;
+
+  void _subscribeToSocket() {
+    SocketService.instance.on('device:status', _onDeviceStatus);
+  }
+
+  void _onDeviceStatus(dynamic data) {
+    final map = data as Map<String, dynamic>;
+    final deviceId = map['deviceId'] as String;
+    final rawStatus = map['status'] as String;
+    final status = rawStatus.toLowerCase() == 'online'
+        ? DeviceStatus.online
+        : DeviceStatus.offline;
+
+    state = state.whenData(
+      (list) => list
+          .map((d) => d.id == deviceId ? _DeviceModelExt.withStatus(d, status) : d)
+          .toList(),
+    );
+  }
+
+  @override
+  void dispose() {
+    SocketService.instance.offAll('device:status');
+    super.dispose();
+  }
 
   Future<void> load() async {
     state = const AsyncValue.loading();
@@ -46,6 +73,23 @@ class DevicesNotifier
     } catch (e) {
       rethrow;
     }
+  }
+}
+
+/// Helper to clone a DeviceModel with a new status (no Freezed needed).
+class _DeviceModelExt {
+  static DeviceModel withStatus(DeviceModel d, DeviceStatus status) {
+    return DeviceModel(
+      id: d.id,
+      userId: d.userId,
+      name: d.name,
+      macAddress: d.macAddress,
+      ipAddress: d.ipAddress,
+      status: status,
+      firmwareVersion: d.firmwareVersion,
+      lastSeenAt: d.lastSeenAt,
+      createdAt: d.createdAt,
+    );
   }
 }
 
