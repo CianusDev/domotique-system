@@ -17,8 +17,10 @@ static BleProvisioning bleProvisioning;
 // Connectivity check (captive portal detection)
 // ──────────────────────────────────────────────
 
-/// Returns true if behind a captive portal (no real internet).
-/// Hits Google's 204 endpoint — expects HTTP 204, anything else = portal.
+/// Returns true if behind a captive portal (redirect/intercept detected).
+/// Hits Google's 204 endpoint — real internet returns 204.
+/// HTTP -1 / negative = can't reach endpoint (no internet, DNS fail) — NOT a portal.
+/// Only treat as portal when server responds but redirects (200/301/302 etc.).
 static bool hasCaptivePortal() {
   HTTPClient http;
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
@@ -26,15 +28,25 @@ static bool hasCaptivePortal() {
 
   if (!http.begin("http://connectivitycheck.gstatic.com/generate_204")) {
     http.end();
-    Serial.println("[WiFi] Connectivity check: failed to init HTTP");
-    return true; // assume portal if we can't even reach it
+    Serial.println("[WiFi] Connectivity check: failed to init HTTP — assuming no internet, not portal");
+    return false; // can't init = no internet, not a captive portal
   }
 
   int code = http.GET();
   http.end();
   Serial.printf("[WiFi] Connectivity check: HTTP %d\n", code);
 
-  return code != HTTP_CODE_NO_CONTENT; // 204 = internet OK = no portal
+  if (code < 0) {
+    // Negative = connection error (HTTPC_ERROR_CONNECTION_REFUSED, DNS fail, timeout)
+    // Not a portal — just no internet or DNS not working
+    Serial.println("[WiFi] Connectivity check: connection error — no internet (not a portal)");
+    return false;
+  }
+
+  // Got a real HTTP response:
+  // 204 = internet OK, no portal
+  // anything else (200, 301, 302...) = captive portal intercept
+  return code != HTTP_CODE_NO_CONTENT;
 }
 
 // ──────────────────────────────────────────────
@@ -134,6 +146,8 @@ void setup() {
       Serial.println("[WiFi] Captive portal detected — falling back to BLE mode");
       cfg.lastError = "captive_portal";
       cfg.save();
+      WiFi.disconnect(true); // prevent loop() MQTT block from running while in BLE mode
+      delay(100);
       bleProvisioning.begin("Domotique-" + WiFi.macAddress().substring(9));
       return; // loop() will handle BLE + update()
     }
