@@ -346,9 +346,15 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
         'mqttBroker': ApiConstants.mqttBroker,
         'deviceId': created.id,
       });
-      await _rxChar!.write(utf8.encode(payload), withoutResponse: false);
+
+      // withoutResponse: true — ESP32 restarts immediately after saving config,
+      // before it can send the ATT Write Response. Using Write With Response
+      // causes Android GATT_ERROR 133 because the connection drops mid-ack.
+      await _rxChar!.write(utf8.encode(payload), withoutResponse: true);
 
       _setStatus('Configuration envoyée, redémarrage ESP32…');
+      // Give ESP32 time to save NVS before we disconnect
+      await Future.delayed(const Duration(milliseconds: 500));
       await _disconnectBle();
 
       if (mounted) setState(() => _step = _Step.done);

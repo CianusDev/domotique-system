@@ -136,9 +136,11 @@ void BleProvisioning::begin(const String& deviceName) {
   BLEService* svc    = server->createService(BLE_SERVICE_UUID);
 
   // RX: app → ESP32
+  // PROPERTY_WRITE_NO_RESPONSE needed for provision cmd: ESP32 restarts before
+  // sending the ATT Write Response, causing Android GATT_ERROR 133 on the app side.
   BLECharacteristic* rx = svc->createCharacteristic(
     BLE_CHAR_RX_UUID,
-    BLECharacteristic::PROPERTY_WRITE
+    BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
   );
   rx->setCallbacks(new ProvisionCallbacks());
 
