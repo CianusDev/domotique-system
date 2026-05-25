@@ -13,10 +13,13 @@ class ActuatorsNotifier
   final ActuatorRepository _repo;
   final String _deviceId;
 
+  // Named refs — off() needs exact same function object, not just event name
+  late final void Function(dynamic) _actuatorStateHandler = _onActuatorState;
+  late final void Function(dynamic) _deviceStatusHandler  = _onDeviceStatus;
+
   void _subscribeToSocket() {
-    SocketService.instance.on('actuator:state', _onActuatorState);
-    // When device goes offline backend resets states — re-sync local list
-    SocketService.instance.on('device:status', _onDeviceStatus);
+    SocketService.instance.on('actuator:state', _actuatorStateHandler);
+    SocketService.instance.on('device:status',  _deviceStatusHandler);
   }
 
   void _onActuatorState(dynamic data) {
@@ -48,8 +51,8 @@ class ActuatorsNotifier
 
   @override
   void dispose() {
-    SocketService.instance.offAll('actuator:state');
-    SocketService.instance.offAll('device:status');
+    SocketService.instance.off('actuator:state', _actuatorStateHandler);
+    SocketService.instance.off('device:status',  _deviceStatusHandler);
     super.dispose();
   }
 

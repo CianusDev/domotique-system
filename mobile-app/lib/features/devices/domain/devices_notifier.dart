@@ -11,8 +11,11 @@ class DevicesNotifier extends StateNotifier<AsyncValue<List<DeviceModel>>> {
 
   final DeviceRepository _repo;
 
+  // Keep named ref so dispose() removes only THIS notifier's listener
+  late final void Function(dynamic) _deviceStatusHandler = _onDeviceStatus;
+
   void _subscribeToSocket() {
-    SocketService.instance.on('device:status', _onDeviceStatus);
+    SocketService.instance.on('device:status', _deviceStatusHandler);
   }
 
   void _onDeviceStatus(dynamic data) {
@@ -32,7 +35,7 @@ class DevicesNotifier extends StateNotifier<AsyncValue<List<DeviceModel>>> {
 
   @override
   void dispose() {
-    SocketService.instance.offAll('device:status');
+    SocketService.instance.off('device:status', _deviceStatusHandler);
     super.dispose();
   }
 
