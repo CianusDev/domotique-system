@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,12 +14,24 @@ class DevicesScreen extends ConsumerStatefulWidget {
 }
 
 class _DevicesScreenState extends ConsumerState<DevicesScreen> {
+  Timer? _pollTimer;
+
   @override
   void initState() {
     super.initState();
     Future.microtask(
       () => ref.read(devicesNotifierProvider.notifier).load(),
     );
+    // Poll every 30s to reflect device online/offline changes automatically
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) ref.read(devicesNotifierProvider.notifier).load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _openAddSheet() async {

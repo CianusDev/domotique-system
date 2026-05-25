@@ -43,4 +43,12 @@ export class DevicesRepository {
   delete(id: string) {
     return this.prisma.device.delete({ where: { id } });
   }
+
+  /** Reset all actuators of a device to 'off' (called on device disconnect). */
+  resetActuatorsState(deviceId: string) {
+    return this.prisma.actuator.updateMany({
+      where: { deviceId },
+      data: { state: 'off' },
+    });
+  }
 }

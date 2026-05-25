@@ -54,5 +54,11 @@ export class DevicesService {
     if (!device) return;
     const status = event.status === 'online' ? DeviceStatus.ONLINE : DeviceStatus.OFFLINE;
     await this.devicesRepository.updateStatus(device.id, status);
+
+    // On disconnect: reset all actuator states to 'off' so DB matches
+    // ESP32 boot state (GPIO starts LOW). Prevents inverted toggle on reconnect.
+    if (status === DeviceStatus.OFFLINE) {
+      await this.devicesRepository.resetActuatorsState(device.id);
+    }
   }
 }
