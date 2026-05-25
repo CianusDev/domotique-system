@@ -22,7 +22,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
   }
 
   Future<void> _openAddSheet() async {
-    await showModalBottomSheet<bool>(
+    final provisioned = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -31,6 +31,16 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
       ),
       builder: (_) => const AddDeviceSheet(),
     );
+
+    if (!mounted) return;
+
+    if (provisioned == true) {
+      // Reload immediately to add the new device
+      await ref.read(devicesNotifierProvider.notifier).load();
+      // Wait for ESP32 to boot + connect MQTT, then refresh status
+      await Future.delayed(const Duration(seconds: 5));
+      if (mounted) ref.read(devicesNotifierProvider.notifier).load();
+    }
   }
 
   Future<void> _confirmDelete(DeviceModel device) async {
