@@ -11,6 +11,8 @@
 static SensorManager sensorManager;
 static BleProvisioning bleProvisioning;
 
+#define PIN_LED_BUILTIN 2  // Built-in blue LED on most ESP32 DevKit boards
+
 // ──────────────────────────────────────────────
 // Connectivity check (captive portal detection)
 // ──────────────────────────────────────────────
@@ -82,12 +84,27 @@ void setupMqttCallbacks() {
   MqttClient::instance().onAddSensor([](const JsonObject& cmd) {
     bool ok = sensorManager.addSensor(cmd);
 
-    // Publish discovery confirmation
     JsonDocument discovery;
     discovery["sensorId"] = cmd["sensorId"].as<String>();
     discovery["status"]   = ok ? "added" : "error";
     discovery["type"]     = cmd["type"].as<String>();
     MqttClient::instance().publishDiscovery(discovery);
+  });
+
+  MqttClient::instance().onActuator([](const String& type, const JsonObject& cmd) {
+    String command = cmd["command"].as<String>();
+    Serial.printf("[Actuator] type=%s command=%s\n", type.c_str(), command.c_str());
+
+    if (type == "led") {
+      bool on;
+      if      (command == "on")     on = true;
+      else if (command == "off")    on = false;
+      else if (command == "toggle") on = !digitalRead(PIN_LED_BUILTIN);
+      else return;
+
+      digitalWrite(PIN_LED_BUILTIN, on ? HIGH : LOW);
+      Serial.printf("[Actuator] LED %s\n", on ? "ON" : "OFF");
+    }
   });
 }
 
@@ -106,6 +123,9 @@ void setup() {
     bleProvisioning.begin("Domotique-Setup");
     return; // loop will just handle BLE
   }
+
+  pinMode(PIN_LED_BUILTIN, OUTPUT);
+  digitalWrite(PIN_LED_BUILTIN, LOW);
 
   connectWifi();
 

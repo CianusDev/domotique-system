@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../actuators/data/actuator_model.dart';
+import '../../actuators/domain/actuators_notifier.dart';
 import '../data/sensor_model.dart';
 import '../domain/sensors_notifier.dart';
 import 'add_sensor_sheet.dart';
@@ -22,11 +24,10 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () => ref
-          .read(sensorsNotifierProvider(widget.deviceId).notifier)
-          .load(),
-    );
+    Future.microtask(() {
+      ref.read(sensorsNotifierProvider(widget.deviceId).notifier).load();
+      ref.read(actuatorsNotifierProvider(widget.deviceId).notifier).load();
+    });
   }
 
   Future<void> _openAddSheet() async {
@@ -79,18 +80,16 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sensorsAsync =
-        ref.watch(sensorsNotifierProvider(widget.deviceId));
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.deviceName),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref
-                .read(sensorsNotifierProvider(widget.deviceId).notifier)
-                .load(),
+            onPressed: () {
+              ref.read(sensorsNotifierProvider(widget.deviceId).notifier).load();
+              ref.read(actuatorsNotifierProvider(widget.deviceId).notifier).load();
+            },
           ),
         ],
       ),
@@ -99,15 +98,155 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
         icon: const Icon(Icons.sensors),
         label: const Text('Ajouter'),
       ),
-      body: sensorsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _buildError(e.toString()),
-        data: (sensors) =>
-            sensors.isEmpty ? _buildEmpty() : _buildList(sensors),
+      body: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final sensorsAsync = ref.watch(sensorsNotifierProvider(widget.deviceId));
+    final actuatorsAsync = ref.watch(actuatorsNotifierProvider(widget.deviceId));
+
+    if (sensorsAsync.isLoading && actuatorsAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final sensors = sensorsAsync.valueOrNull ?? [];
+    final actuators = actuatorsAsync.valueOrNull ?? [];
+
+    if (sensors.isEmpty && actuators.isEmpty && !sensorsAsync.isLoading) {
+      return _buildEmpty();
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await ref.read(sensorsNotifierProvider(widget.deviceId).notifier).load();
+        await ref.read(actuatorsNotifierProvider(widget.deviceId).notifier).load();
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── Actuateurs ──────────────────────────────────────────
+          _SectionHeader(
+            title: 'Actuateurs',
+            onAdd: () => _showAddActuatorDialog(),
+          ),
+          const SizedBox(height: 8),
+          if (actuators.isEmpty)
+            _EmptySection(label: 'Aucun actuateur — appuyez sur + pour ajouter')
+          else
+            ...actuators.map((a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _ActuatorCard(
+                    actuator: a,
+                    onToggle: () => ref
+                        .read(actuatorsNotifierProvider(widget.deviceId).notifier)
+                        .control(a.id, command: 'toggle'),
+                    onDelete: () => _confirmDeleteActuator(a),
+                  ),
+                )),
+
+          const SizedBox(height: 24),
+
+          // ── Capteurs ────────────────────────────────────────────
+          _SectionHeader(title: 'Capteurs', onAdd: _openAddSheet),
+          const SizedBox(height: 8),
+          if (sensors.isEmpty)
+            _EmptySection(label: 'Aucun capteur — appuyez sur + pour ajouter')
+          else
+            ...sensors.map((s) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _SensorCard(
+                    sensor: s,
+                    onDelete: () => _confirmDelete(s),
+                  ),
+                )),
+        ],
       ),
     );
   }
 
+  Future<void> _showAddActuatorDialog() async {
+    final nameCtrl = TextEditingController(text: 'LED Bleue');
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ajouter LED'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Nom'),
+            ),
+            const SizedBox(height: 8),
+            const Text('Type: LED  •  GPIO: 2 (built-in)',
+                style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref
+                    .read(actuatorsNotifierProvider(widget.deviceId).notifier)
+                    .create(type: 'led', name: nameCtrl.text.trim(), pin: 2);
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Erreur création actuateur')),
+                  );
+                }
+              }
+            },
+            child: const Text('Ajouter'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteActuator(ActuatorModel actuator) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer'),
+        content: Text('Supprimer "${actuator.name}" ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      try {
+        await ref
+            .read(actuatorsNotifierProvider(widget.deviceId).notifier)
+            .delete(actuator.id);
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erreur suppression')),
+          );
+        }
+      }
+    }
+  }
+
+  // ignore: unused_element
   Widget _buildError(String message) {
     return Center(
       child: Column(
@@ -119,9 +258,10 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
           FilledButton.tonal(
-            onPressed: () => ref
-                .read(sensorsNotifierProvider(widget.deviceId).notifier)
-                .load(),
+            onPressed: () {
+              ref.read(sensorsNotifierProvider(widget.deviceId).notifier).load();
+              ref.read(actuatorsNotifierProvider(widget.deviceId).notifier).load();
+            },
             child: const Text('Réessayer'),
           ),
         ],
@@ -138,35 +278,14 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
               size: 72,
               color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(height: 16),
-          Text(
-            'Aucun capteur',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Aucun capteur ni actuateur',
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          Text(
-            'Ajoutez votre premier capteur',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
+          Text('Appuyez sur + pour ajouter',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  )),
         ],
-      ),
-    );
-  }
-
-  Widget _buildList(List<SensorModel> sensors) {
-    return RefreshIndicator(
-      onRefresh: () => ref
-          .read(sensorsNotifierProvider(widget.deviceId).notifier)
-          .load(),
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: sensors.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (_, i) => _SensorCard(
-          sensor: sensors[i],
-          onDelete: () => _confirmDelete(sensors[i]),
-        ),
       ),
     );
   }
@@ -269,5 +388,102 @@ class _SensorCard extends StatelessWidget {
     if (diff.inHours < 1) return 'Il y a ${diff.inMinutes} min';
     if (diff.inDays < 1) return 'Il y a ${diff.inHours} h';
     return 'Il y a ${diff.inDays} j';
+  }
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final VoidCallback onAdd;
+  const _SectionHeader({required this.title, required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              letterSpacing: 0.8,
+            )),
+        const Spacer(),
+        IconButton(
+          icon: const Icon(Icons.add, size: 20),
+          onPressed: onAdd,
+          tooltip: 'Ajouter',
+        ),
+      ],
+    );
+  }
+}
+
+// ── Empty section placeholder ─────────────────────────────────────────────────
+
+class _EmptySection extends StatelessWidget {
+  final String label;
+  const _EmptySection({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+    );
+  }
+}
+
+// ── Actuator card ─────────────────────────────────────────────────────────────
+
+class _ActuatorCard extends StatelessWidget {
+  final ActuatorModel actuator;
+  final VoidCallback onToggle;
+  final VoidCallback onDelete;
+
+  const _ActuatorCard({
+    required this.actuator,
+    required this.onToggle,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isOn = actuator.isOn;
+
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: isOn
+              ? cs.primaryContainer
+              : cs.surfaceContainerHighest,
+          child: Icon(
+            Icons.lightbulb,
+            color: isOn ? cs.primary : cs.onSurfaceVariant,
+          ),
+        ),
+        title: Text(actuator.name,
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text('GPIO ${actuator.pin}  •  ${actuator.type.toUpperCase()}'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Switch(
+              value: isOn,
+              onChanged: (_) => onToggle(),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: cs.error,
+              onPressed: onDelete,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

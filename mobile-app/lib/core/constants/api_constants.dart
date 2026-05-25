@@ -1,12 +1,12 @@
 class ApiConstants {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:5000/api',
+    defaultValue: 'http://192.168.32.182:5000/api',
   );
 
   static const String mqttBroker = String.fromEnvironment(
     'MQTT_BROKER',
-    defaultValue: '10.0.2.2',
+    defaultValue: '192.168.32.182',
   );
 
   // Auth
@@ -25,7 +25,7 @@ class ApiConstants {
   // Sensors
   static const String sensorTypes = '/sensor-types';
 
-  // Actuators
+  // Actuators — /actuators/:id/control  |  /devices/:deviceId/actuators
   static const String actuators = '/actuators';
 
   // Automations
