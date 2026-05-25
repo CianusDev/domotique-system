@@ -93,11 +93,6 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddSheet,
-        icon: const Icon(Icons.sensors),
-        label: const Text('Ajouter'),
-      ),
       body: _buildBody(context),
     );
   }
@@ -112,10 +107,6 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
 
     final sensors = sensorsAsync.valueOrNull ?? [];
     final actuators = actuatorsAsync.valueOrNull ?? [];
-
-    if (sensors.isEmpty && actuators.isEmpty && !sensorsAsync.isLoading) {
-      return _buildEmpty();
-    }
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -269,26 +260,6 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
     );
   }
 
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.sensors_off,
-              size: 72,
-              color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(height: 16),
-          Text('Aucun capteur ni actuateur',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text('Appuyez sur + pour ajouter',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  )),
-        ],
-      ),
-    );
-  }
 }
 
 class _SensorCard extends StatelessWidget {
