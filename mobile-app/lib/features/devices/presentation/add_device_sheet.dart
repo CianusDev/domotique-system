@@ -165,14 +165,32 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
   // ── BLE connection management ──────────────────────────────────────────
 
   /// Connect BLE and discover NUS characteristics. Reuses existing connection.
+  ///
+  /// Verifies actual connection state — WiFi scan on ESP32 can drop BLE
+  /// (shared 2.4GHz radio). Reconnects transparently if stale.
+  /// Requests MTU 512 so large payloads (provision JSON, wifi_list) fit.
   Future<void> _ensureBleConnected() async {
-    if (_bleDevice != null && _rxChar != null && _txChar != null) return;
+    // Check actual connection state, not just cached refs
+    if (_bleDevice != null && _rxChar != null && _txChar != null) {
+      if (_bleDevice!.isConnected) return;
+      // Connection dropped (e.g. during WiFi scan) — clear stale cache
+      _bleDevice = null;
+      _rxChar    = null;
+      _txChar    = null;
+    }
 
     if (mounted) setState(() => _bleConnecting = true);
     try {
       final device = _selected!.device;
       await device.connect(timeout: const Duration(seconds: 10));
       _bleDevice = device;
+
+      // Request larger MTU — default 23-byte frame = only 20-byte payload,
+      // not enough for provision JSON or wifi_list response chunks.
+      await device.requestMtu(512).catchError((_) => 0);
+
+      // Short settle: BLE stack needs a moment after MTU negotiation
+      await Future.delayed(const Duration(milliseconds: 300));
 
       final services = await device.discoverServices();
       final svc = services.firstWhere(
