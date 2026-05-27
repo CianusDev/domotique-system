@@ -2,6 +2,7 @@
 #include "dht_sensor.h"
 #include "pir_sensor.h"
 #include "ds18b20_sensor.h"
+#include "ldr_sensor.h"
 
 bool SensorManager::addSensor(const JsonObject& cmd) {
   String sensorId = cmd["sensorId"].as<String>();
@@ -30,6 +31,7 @@ bool SensorManager::addSensor(const JsonObject& cmd) {
   else if (type == "DHT11")   sensor = std::make_unique<DhtSensor>(cfg);
   else if (type == "PIR")     sensor = std::make_unique<PirSensor>(cfg);
   else if (type == "DS18B20") sensor = std::make_unique<Ds18b20Sensor>(cfg);
+  else if (type == "LDR")     sensor = std::make_unique<LdrSensor>(cfg);
   else {
     Serial.printf("[SensorManager] Unknown sensor type: %s\n", type.c_str());
     return false;
