@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../actuators/data/actuator_model.dart';
 import '../../actuators/domain/actuators_notifier.dart';
 import '../data/sensor_model.dart';
+import '../domain/sensor_readings_notifier.dart';
 import '../domain/sensors_notifier.dart';
 import 'add_sensor_sheet.dart';
 
@@ -148,6 +149,7 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _SensorCard(
                     sensor: s,
+                    deviceId: widget.deviceId,
                     onDelete: () => _confirmDelete(s),
                   ),
                 )),
@@ -237,11 +239,16 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
 
 }
 
-class _SensorCard extends StatelessWidget {
+class _SensorCard extends ConsumerWidget {
   final SensorModel sensor;
+  final String deviceId;
   final VoidCallback onDelete;
 
-  const _SensorCard({required this.sensor, required this.onDelete});
+  const _SensorCard({
+    required this.sensor,
+    required this.deviceId,
+    required this.onDelete,
+  });
 
   Color _statusColor(BuildContext context) {
     return switch (sensor.status) {
@@ -260,68 +267,75 @@ class _SensorCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final color = _statusColor(context);
+    final readings = ref.watch(sensorReadingsProvider(deviceId));
+    final latest = readings[sensor.id];
 
     return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor:
-              Theme.of(context).colorScheme.secondaryContainer,
-          child: Icon(
-            Icons.sensors,
-            color: Theme.of(context).colorScheme.onSecondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            child: Icon(
+              Icons.sensors,
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
           ),
-        ),
-        title: Text(sensor.name,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('GPIO ${sensor.pin}'),
-            if (sensor.lastReadAt != null)
-              Text(
-                'Dernière lecture: ${_formatTime(sensor.lastReadAt!)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
+          title: Text(sensor.name,
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('GPIO ${sensor.pin}'),
+              if (latest != null) ...[
+                const SizedBox(height: 4),
+                _SensorReadingRow(payload: latest),
+              ] else if (sensor.lastReadAt != null) ...[
+                Text(
+                  'Dernière lecture: ${_formatTime(sensor.lastReadAt!)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _statusLabel(),
-                    style: TextStyle(color: color, fontSize: 11),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Text(
+                      _statusLabel(),
+                      style: TextStyle(color: color, fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              color: Theme.of(context).colorScheme.error,
-              onPressed: onDelete,
-            ),
-          ],
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                color: Theme.of(context).colorScheme.error,
+                onPressed: onDelete,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -334,6 +348,138 @@ class _SensorCard extends StatelessWidget {
     if (diff.inHours < 1) return 'Il y a ${diff.inMinutes} min';
     if (diff.inDays < 1) return 'Il y a ${diff.inHours} h';
     return 'Il y a ${diff.inDays} j';
+  }
+}
+
+// ── Live reading display ──────────────────────────────────────────────────────
+
+class _SensorReadingRow extends StatelessWidget {
+  final Map<String, dynamic> payload;
+  const _SensorReadingRow({required this.payload});
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = _buildChips(context);
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Wrap(spacing: 6, runSpacing: 4, children: chips);
+  }
+
+  List<Widget> _buildChips(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        );
+    final chips = <Widget>[];
+
+    // ── Temperature ────────────────────────────────────────────────
+    if (payload.containsKey('temperature')) {
+      final v = (payload['temperature'] as num).toDouble();
+      chips.add(_Chip(
+        icon: Icons.thermostat,
+        label: '${v.toStringAsFixed(1)} °C',
+        color: _tempColor(v),
+        style: style,
+      ));
+    }
+
+    // ── Humidity ───────────────────────────────────────────────────
+    if (payload.containsKey('humidity')) {
+      final v = (payload['humidity'] as num).toDouble();
+      chips.add(_Chip(
+        icon: Icons.water_drop,
+        label: '${v.toStringAsFixed(0)} %',
+        color: Colors.blue,
+        style: style,
+      ));
+    }
+
+    // ── Light / LDR ────────────────────────────────────────────────
+    if (payload.containsKey('light')) {
+      final lux = (payload['light'] as num).toDouble();
+      final level = payload['level'] as String? ?? '';
+      chips.add(_Chip(
+        icon: Icons.wb_sunny,
+        label: '${lux.toStringAsFixed(0)} lux${level.isNotEmpty ? ' · $level' : ''}',
+        color: Colors.amber.shade700,
+        style: style,
+      ));
+    }
+
+    // ── Motion / PIR ───────────────────────────────────────────────
+    if (payload.containsKey('motion')) {
+      final motion = payload['motion'] as bool? ?? false;
+      chips.add(_Chip(
+        icon: motion ? Icons.directions_run : Icons.bedroom_parent,
+        label: motion ? 'Mouvement' : 'Calme',
+        color: motion ? Colors.orange : Colors.grey,
+        style: style,
+      ));
+    }
+
+    // ── Distance / HC-SR04 ─────────────────────────────────────────
+    if (payload.containsKey('distance')) {
+      final v = (payload['distance'] as num).toDouble();
+      chips.add(_Chip(
+        icon: Icons.straighten,
+        label: '${v.toStringAsFixed(1)} cm',
+        color: Colors.teal,
+        style: style,
+      ));
+    }
+
+    // ── Pressure / BME280 ──────────────────────────────────────────
+    if (payload.containsKey('pressure')) {
+      final v = (payload['pressure'] as num).toDouble();
+      chips.add(_Chip(
+        icon: Icons.compress,
+        label: '${v.toStringAsFixed(0)} hPa',
+        color: Colors.purple,
+        style: style,
+      ));
+    }
+
+    return chips;
+  }
+
+  Color _tempColor(double t) {
+    if (t < 10) return Colors.blue;
+    if (t < 20) return Colors.lightBlue;
+    if (t < 28) return Colors.green;
+    if (t < 35) return Colors.orange;
+    return Colors.red;
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final TextStyle? style;
+  const _Chip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: style?.copyWith(color: color) ??
+              TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
   }
 }
 
