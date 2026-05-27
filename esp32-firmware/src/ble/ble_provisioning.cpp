@@ -19,6 +19,11 @@ static BleProvisioning::DoneCallback s_doneCb;
 static BLECharacteristic* s_txChar        = nullptr;
 static volatile bool       s_scanRequested = false;  // set from BLE task, consumed in loop()
 
+// ── WiFi test state ───────────────────────────────────────────────────────────
+struct WifiTestRequest { String ssid; String password; };
+static volatile bool   s_wifiTestRequested  = false;
+static WifiTestRequest s_wifiTestCredentials;
+
 // ── BLE TX helpers ────────────────────────────────────────────────────────────
 
 /// Send a string over BLE TX, chunked to fit the negotiated MTU.
@@ -81,6 +86,49 @@ static void doWifiScan() {
   bleNotify(output);
 }
 
+// ── WiFi test (runs on main task via update()) ────────────────────────────────
+// Tries to connect to the given WiFi WITHOUT saving credentials to NVS.
+// Sends result back via BLE TX so the app can validate before registering
+// the device in the backend.
+
+static void doWifiTest() {
+  const String ssid = s_wifiTestCredentials.ssid;
+  const String pass = s_wifiTestCredentials.password;
+  Serial.printf("[BLE] WiFi test — connecting to: %s\n", ssid.c_str());
+
+  WiFi.disconnect(true);
+  delay(200);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
+  // 12 s timeout — short enough to keep BLE interference manageable
+  const unsigned long TIMEOUT_MS = 12000UL;
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < TIMEOUT_MS) {
+    delay(200);
+  }
+
+  JsonDocument doc;
+  doc["type"] = "wifi_test";
+  if (WiFi.status() == WL_CONNECTED) {
+    doc["status"] = "connected";
+    doc["ip"]     = WiFi.localIP().toString();
+    Serial.printf("[BLE] WiFi test OK — IP: %s\n", WiFi.localIP().toString().c_str());
+  } else {
+    doc["status"] = "failed";
+    Serial.println("[BLE] WiFi test FAILED (wrong password or SSID unreachable)");
+  }
+
+  // Always release the radio after test
+  WiFi.disconnect(true);
+  delay(200);
+
+  String output;
+  serializeJson(doc, output);
+  Serial.printf("[BLE] TX wifi_test: %s\n", output.c_str());
+  bleNotify(output);
+}
+
 // ── Provision handler (safe to run from BLE task — just NVS write + reboot) ──
 
 static void doProvision(const JsonDocument& doc) {
@@ -115,6 +163,12 @@ class ProvisionCallbacks : public BLECharacteristicCallbacks {
     if (strcmp(cmd, "scan_wifi") == 0) {
       // Defer to main task — WiFi scan must not run on the BLE task
       s_scanRequested = true;
+
+    } else if (strcmp(cmd, "test_wifi") == 0) {
+      // Test credentials WITHOUT saving to NVS — deferred to main task
+      s_wifiTestCredentials.ssid     = doc["ssid"].as<String>();
+      s_wifiTestCredentials.password = doc["password"].as<String>();
+      s_wifiTestRequested = true;
 
     } else if (strcmp(cmd, "provision") == 0 || doc["ssid"].is<const char*>()) {
       // "provision" cmd OR legacy format (no cmd field, has ssid)
@@ -169,5 +223,9 @@ void BleProvisioning::update() {
   if (s_scanRequested) {
     s_scanRequested = false;
     doWifiScan();
+  }
+  if (s_wifiTestRequested) {
+    s_wifiTestRequested = false;
+    doWifiTest();
   }
 }

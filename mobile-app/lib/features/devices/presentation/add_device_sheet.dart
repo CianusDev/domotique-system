@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' show Completer, TimeoutException;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -300,6 +300,63 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
     });
   }
 
+  // ── WiFi test ─────────────────────────────────────────────────────────
+
+  /// Send test_wifi to ESP32 — it tries the credentials WITHOUT saving to NVS.
+  /// Returns true if connected. On failure sets [_wifiFormError] and returns false.
+  Future<bool> _testWifi(String ssid, String password) async {
+    try {
+      await _txChar!.setNotifyValue(true);
+      final completer = Completer<bool>();
+      final buffer = StringBuffer();
+
+      final sub = _txChar!.onValueReceived.listen((data) {
+        buffer.write(utf8.decode(data, allowMalformed: true));
+        try {
+          final json = jsonDecode(buffer.toString()) as Map<String, dynamic>;
+          if (json['type'] == BleConstants.responseWifiTest && !completer.isCompleted) {
+            completer.complete(json['status'] == 'connected');
+          }
+        } catch (_) {
+          // Incomplete JSON — keep accumulating chunks
+        }
+      });
+
+      final payload = jsonEncode({
+        'cmd': BleConstants.cmdTestWifi,
+        'ssid': ssid,
+        'password': password,
+      });
+      await _rxChar!.write(utf8.encode(payload), withoutResponse: false);
+
+      try {
+        // 20 s: 12 s WiFi timeout + margin for BLE reconnect after radio interference
+        final connected = await completer.future.timeout(
+          const Duration(seconds: 20),
+          onTimeout: () =>
+              throw TimeoutException('L\'ESP32 n\'a pas répondu au test WiFi'),
+        );
+        if (!connected && mounted) {
+          setState(() =>
+              _wifiFormError = 'Mot de passe incorrect ou réseau inaccessible');
+        }
+        return connected;
+      } finally {
+        await sub.cancel();
+        await _txChar!.setNotifyValue(false).catchError((_) => false);
+      }
+    } on TimeoutException catch (e) {
+      if (mounted) setState(() => _wifiFormError = e.message ?? 'Timeout');
+      return false;
+    } catch (e) {
+      if (mounted) {
+        setState(() =>
+            _wifiFormError = e.toString().replaceAll('Exception: ', ''));
+      }
+      return false;
+    }
+  }
+
   // ── Provision ─────────────────────────────────────────────────────────
 
   Future<void> _provision() async {
@@ -329,8 +386,23 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
 
     try {
       await _ensureBleConnected();
-      _setStatus('Création de l\'appareil…');
 
+      // ── 1. Test WiFi credentials BEFORE creating device in backend ──────
+      // Ensures we don't register a device that can't connect to WiFi.
+      _setStatus('Test de connexion WiFi…');
+      final wifiOk = await _testWifi(ssid, password);
+      if (!wifiOk) {
+        // Error already shown by _testWifi — go back to WiFi pick
+        if (mounted) setState(() => _step = _Step.wifiPick);
+        return;
+      }
+
+      // ── 2. Re-ensure BLE (WiFi test may have interrupted the connection) ─
+      _setStatus('Reconnexion BLE…');
+      await _ensureBleConnected();
+
+      // ── 3. Register device in backend ────────────────────────────────────
+      _setStatus('Création de l\'appareil…');
       final macAddress = _selected!.device.remoteId.str;
       final created = await ref.read(devicesNotifierProvider.notifier).create(
             name: _nameCtrl.text.trim(),
@@ -338,7 +410,8 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
           );
       if (created == null) throw Exception('Échec création appareil');
 
-      _setStatus('Envoi de la configuration WiFi…');
+      // ── 4. Send provision JSON (credentials + deviceId) to ESP32 ─────────
+      _setStatus('Envoi de la configuration…');
       final payload = jsonEncode({
         'cmd': 'provision',
         'ssid': ssid,

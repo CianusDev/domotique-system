@@ -68,6 +68,8 @@ void connectWifi() {
     Serial.printf("\n[WiFi] Connected — IP: %s\n", WiFi.localIP().toString().c_str());
   } else {
     Serial.println("\n[WiFi] Failed — entering BLE provisioning mode");
+    WiFi.disconnect(true); // stop retry loop so radio is free for WiFi scan
+    delay(100);
     bleProvisioning.begin("Domotique-" + WiFi.macAddress().substring(9));
   }
 }

@@ -12,8 +12,17 @@ class BleConstants {
   /// Request WiFi scan. ESP32 responds on TX: {"type":"wifi_list","networks":[…]}
   static const String cmdScanWifi = '{"cmd":"scan_wifi"}';
 
+  /// Test WiFi credentials WITHOUT saving to NVS.
+  /// Send: {"cmd":"test_wifi","ssid":"…","password":"…"}
+  /// ESP32 responds on TX: {"type":"wifi_test","status":"connected","ip":"…"}
+  ///                     or {"type":"wifi_test","status":"failed"}
+  static const String cmdTestWifi = 'test_wifi';
+
   // ── BLE response types (ESP32 → app via TX char) ──────────────────────────
   /// wifi_list response: {"type":"wifi_list","networks":[{"ssid":"…","rssi":-65,"auth":3}]}
   /// auth=0 → OPEN, auth≥1 → secured (WEP/WPA/WPA2/WPA3)
   static const String responseWifiList = 'wifi_list';
+
+  /// wifi_test response: {"type":"wifi_test","status":"connected"|"failed","ip":"…"?}
+  static const String responseWifiTest = 'wifi_test';
 }
