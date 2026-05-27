@@ -27,22 +27,30 @@ class SensorsNotifier
     required int pin,
     Map<String, dynamic>? config,
   }) async {
-    final sensor = await _repo.addSensor(
-      deviceId: deviceId,
-      sensorTypeId: sensorTypeId,
-      name: name,
-      pin: pin,
-      config: config,
-    );
-    state = state.whenData((list) => [...list, sensor]);
-    return sensor;
+    try {
+      final sensor = await _repo.addSensor(
+        deviceId: deviceId,
+        sensorTypeId: sensorTypeId,
+        name: name,
+        pin: pin,
+        config: config,
+      );
+      state = state.whenData((list) => [...list, sensor]);
+      return sensor;
+    } catch (_) {
+      rethrow;
+    }
   }
 
   Future<void> delete(String sensorId) async {
-    await _repo.delete(sensorId);
-    state = state.whenData(
-      (list) => list.where((s) => s.id != sensorId).toList(),
-    );
+    try {
+      await _repo.delete(sensorId);
+      state = state.whenData(
+        (list) => list.where((s) => s.id != sensorId).toList(),
+      );
+    } catch (_) {
+      rethrow;
+    }
   }
 }
 

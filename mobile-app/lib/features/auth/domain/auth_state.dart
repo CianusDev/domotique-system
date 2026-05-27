@@ -2,6 +2,11 @@ import '../../../shared/models/user_model.dart';
 
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
+/// Sentinel used to distinguish "leave unchanged" from "set to null"
+/// in [AuthState.copyWith]. Without this, copyWith(error: null) cannot
+/// clear the error field (null falls through the ?? default).
+const _kUnchanged = Object();
+
 class AuthState {
   final AuthStatus status;
   final UserModel? user;
@@ -44,13 +49,13 @@ class AuthState {
 
   AuthState copyWith({
     AuthStatus? status,
-    UserModel? user,
-    String? error,
+    Object? user  = _kUnchanged,
+    Object? error = _kUnchanged,
   }) {
     return AuthState(
       status: status ?? this.status,
-      user: user ?? this.user,
-      error: error ?? this.error,
+      user:  identical(user,  _kUnchanged) ? this.user  : user  as UserModel?,
+      error: identical(error, _kUnchanged) ? this.error : error as String?,
     );
   }
 

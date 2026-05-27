@@ -48,4 +48,18 @@ class DeviceModel {
   }
 
   bool get isOnline => status == DeviceStatus.online;
+
+  DeviceModel copyWith({DeviceStatus? status, DateTime? lastSeenAt}) {
+    return DeviceModel(
+      id: id,
+      userId: userId,
+      name: name,
+      macAddress: macAddress,
+      ipAddress: ipAddress,
+      status: status ?? this.status,
+      firmwareVersion: firmwareVersion,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      createdAt: createdAt,
+    );
+  }
 }

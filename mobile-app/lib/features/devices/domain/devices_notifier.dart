@@ -28,7 +28,7 @@ class DevicesNotifier extends StateNotifier<AsyncValue<List<DeviceModel>>> {
 
     state = state.whenData(
       (list) => list
-          .map((d) => d.id == deviceId ? _DeviceModelExt.withStatus(d, status) : d)
+          .map((d) => d.id == deviceId ? d.copyWith(status: status) : d)
           .toList(),
     );
   }
@@ -76,23 +76,6 @@ class DevicesNotifier extends StateNotifier<AsyncValue<List<DeviceModel>>> {
     } catch (e) {
       rethrow;
     }
-  }
-}
-
-/// Helper to clone a DeviceModel with a new status (no Freezed needed).
-class _DeviceModelExt {
-  static DeviceModel withStatus(DeviceModel d, DeviceStatus status) {
-    return DeviceModel(
-      id: d.id,
-      userId: d.userId,
-      name: d.name,
-      macAddress: d.macAddress,
-      ipAddress: d.ipAddress,
-      status: status,
-      firmwareVersion: d.firmwareVersion,
-      lastSeenAt: d.lastSeenAt,
-      createdAt: d.createdAt,
-    );
   }
 }
 

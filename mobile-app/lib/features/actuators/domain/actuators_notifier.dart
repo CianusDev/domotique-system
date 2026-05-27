@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/websocket/socket_service.dart';
+import '../../../shared/utils/dio_error_helper.dart';
 import '../data/actuator_model.dart';
 import '../data/actuator_repository.dart';
 
@@ -62,7 +63,7 @@ class ActuatorsNotifier
       final actuators = await _repo.findAll(_deviceId);
       state = AsyncValue.data(actuators);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      state = AsyncValue.error(extractDioError(e), st);
     }
   }
 

@@ -1,14 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage/auth_storage.dart';
 import '../../../core/websocket/socket_service.dart';
+import '../../../features/actuators/domain/actuators_notifier.dart';
+import '../../../features/devices/domain/devices_notifier.dart';
+import '../../../features/sensors/domain/sensors_notifier.dart';
 import '../../../shared/utils/dio_error_helper.dart';
 import '../data/auth_repository.dart';
 import 'auth_state.dart';
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._repo) : super(const AuthState.initial());
+  AuthNotifier(this._repo, this._ref) : super(const AuthState.initial());
 
   final AuthRepository _repo;
+  final Ref _ref;
 
   /// Called on app start — tries to restore session from stored token.
   Future<void> checkAuth() async {
@@ -88,8 +92,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } finally {
       SocketService.instance.disconnect(); // close WebSocket before clearing token
       await AuthStorage.clearToken();
+      _invalidateUserScopedProviders();
       state = const AuthState.unauthenticated();
     }
+  }
+
+  /// Reset all caches tied to the current user so the next login starts clean.
+  /// Without this, devices/sensors/actuators from the previous session would
+  /// flash on screen before refetch.
+  void _invalidateUserScopedProviders() {
+    _ref.invalidate(devicesNotifierProvider);
+    _ref.invalidate(sensorsNotifierProvider);
+    _ref.invalidate(actuatorsNotifierProvider);
   }
 
   Future<void> forgotPassword(String email) async {
@@ -109,5 +123,5 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.read(authRepositoryProvider));
+  return AuthNotifier(ref.read(authRepositoryProvider), ref);
 });
