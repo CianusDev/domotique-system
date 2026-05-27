@@ -104,13 +104,26 @@ class _AddSensorSheetState extends ConsumerState<AddSensorSheet> {
                 initialValue: _selectedType,
                 hint: const Text('Type de capteur'),
                 isExpanded: true,
+                // Each menu row needs ~48 px for two lines of text
+                itemHeight: 48,
+                // When closed, show only "TYPE — short name" on one line
+                selectedItemBuilder: (ctx) => types
+                    .map((t) => Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${t.type} — ${t.name}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ))
+                    .toList(),
                 items: types
                     .map(
                       (t) => DropdownMenuItem(
                         value: t,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(t.type,
                                 style: const TextStyle(
