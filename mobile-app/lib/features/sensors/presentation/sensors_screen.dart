@@ -273,70 +273,79 @@ class _SensorCard extends ConsumerWidget {
     final latest = readings[sensor.id];
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-            child: Icon(
-              Icons.sensors,
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header row ────────────────────────────────────────────
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor:
+                  Theme.of(context).colorScheme.secondaryContainer,
+              child: Icon(
+                Icons.sensors,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              ),
             ),
-          ),
-          title: Text(sensor.name,
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('GPIO ${sensor.pin}'),
-              if (latest != null) ...[
-                const SizedBox(height: 4),
-                _SensorReadingRow(payload: latest),
-              ] else if (sensor.lastReadAt != null) ...[
-                Text(
-                  'Dernière lecture: ${_formatTime(sensor.lastReadAt!)}',
-                  style: Theme.of(context).textTheme.bodySmall,
+            title: Text(sensor.name,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text('GPIO ${sensor.pin}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Status badge
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _statusLabel(),
+                        style: TextStyle(color: color, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  color: Theme.of(context).colorScheme.error,
+                  onPressed: onDelete,
                 ),
               ],
-            ],
+            ),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _statusLabel(),
-                      style: TextStyle(color: color, fontSize: 11),
-                    ),
-                  ],
-                ),
+
+          // ── Live readings — full card width, no trailing constraint ──
+          if (latest != null)
+            Padding(
+              padding:
+                  const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+              child: _SensorReadingRow(payload: latest),
+            )
+          else if (sensor.lastReadAt != null)
+            Padding(
+              padding:
+                  const EdgeInsets.only(left: 16, right: 16, bottom: 10),
+              child: Text(
+                'Dernière lecture: ${_formatTime(sensor.lastReadAt!)}',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 20),
-                color: Theme.of(context).colorScheme.error,
-                onPressed: onDelete,
-              ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -475,8 +484,17 @@ class _Chip extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 4),
-          Text(label, style: style?.copyWith(color: color) ??
-              TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: style?.copyWith(color: color) ??
+                  TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: color),
+            ),
+          ),
         ],
       ),
     );

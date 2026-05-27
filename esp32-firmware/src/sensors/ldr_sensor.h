@@ -16,7 +16,7 @@
  */
 class LdrSensor : public SensorBase {
 public:
-  static constexpr uint32_t DEFAULT_INTERVAL_MS = 5000;
+  static constexpr uint32_t DEFAULT_INTERVAL_MS = 2000;
   static constexpr uint16_t ADC_MAX             = 4095;
 
   explicit LdrSensor(Config cfg);
