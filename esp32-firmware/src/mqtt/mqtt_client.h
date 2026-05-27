@@ -8,6 +8,10 @@
 /**
  * Singleton MQTT client.
  * Topics follow: home/{deviceId}/...
+ *
+ * Reconnect is non-blocking — failed attempts retry every 5s via loop().
+ * Call begin() once after WiFi is up. All publish* methods silently no-op
+ * when not connected.
  */
 class MqttClient {
 public:
@@ -16,6 +20,9 @@ public:
   void begin(const String& deviceId, const String& broker, uint16_t port = 1883);
   void loop();
   bool connected();
+
+  // Cleanly publish "offline" before a planned reboot — bypasses LWT delay.
+  void publishOfflineAndDisconnect();
 
   // Publish sensor reading: home/{deviceId}/sensors/{sensorId}/data
   void publishSensorData(const String& sensorId, const JsonDocument& doc);
@@ -41,7 +48,7 @@ public:
 
 private:
   MqttClient() = default;
-  void reconnect();
+  void tryReconnect();
   void handleMessage(const char* topic, const uint8_t* payload, unsigned int len);
   static void staticCallback(char* topic, uint8_t* payload, unsigned int len);
 
@@ -50,6 +57,8 @@ private:
   String        _deviceId;
   String        _broker;
   uint16_t      _port = 1883;
+  bool          _started = false;
+  unsigned long _lastReconnectAttempt = 0;
 
   AddSensorCallback    _addSensorCb;
   ActuatorCallback     _actuatorCb;

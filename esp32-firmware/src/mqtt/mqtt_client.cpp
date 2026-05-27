@@ -1,5 +1,7 @@
 #include "mqtt_client.h"
 
+#define MQTT_RECONNECT_PERIOD_MS 5000UL  // wait this long between failed reconnects
+
 MqttClient& MqttClient::instance() {
   static MqttClient inst;
   return inst;
@@ -9,50 +11,73 @@ void MqttClient::begin(const String& deviceId, const String& broker, uint16_t po
   _deviceId = deviceId;
   _broker   = broker;
   _port     = port;
+  _started  = true;
 
   _client.setServer(broker.c_str(), port);
   _client.setCallback(staticCallback);
   _client.setBufferSize(1024);
   // Short keepalive → broker detects unclean disconnect faster → LWT fires in ~7s
   // (broker waits 1.5 × keepalive before publishing "offline")
-  // Default PubSubClient = 15s → ~22s delay. 5s → ~7s.
   _client.setKeepAlive(5);
 }
 
 void MqttClient::loop() {
-  if (!_client.connected()) reconnect();
+  if (!_started) return;
+  if (!_client.connected()) {
+    // Non-blocking reconnect: only attempt every MQTT_RECONNECT_PERIOD_MS.
+    // Old code used delay(5000) on failure, which froze sensors + actuators.
+    if (millis() - _lastReconnectAttempt >= MQTT_RECONNECT_PERIOD_MS) {
+      _lastReconnectAttempt = millis();
+      tryReconnect();
+    }
+    return;
+  }
   _client.loop();
 }
 
 bool MqttClient::connected() {
-  return _client.connected();
+  return _started && _client.connected();
 }
 
-void MqttClient::reconnect() {
-  if (_client.connected()) return;
-
+void MqttClient::tryReconnect() {
   Serial.print("[MQTT] Connecting...");
   String clientId = "esp32-" + _deviceId;
 
-  if (_client.connect(clientId.c_str(), nullptr, nullptr,
-                      ("home/" + _deviceId + "/status").c_str(),
-                      0, true, "offline")) {
-    Serial.println(" connected");
-    publishStatus("online");
+  bool ok = _client.connect(
+    clientId.c_str(), nullptr, nullptr,
+    ("home/" + _deviceId + "/status").c_str(),
+    0, true, "offline"
+  );
 
-    // Subscribe to add-sensor commands
-    _client.subscribe(("home/" + _deviceId + "/sensors/control/add").c_str());
-    // Subscribe to all actuator commands
-    _client.subscribe(("home/" + _deviceId + "/actuators/+/cmd/state").c_str());
-    // Subscribe to factory-reset command (sent by backend when device is deleted)
-    _client.subscribe(("home/" + _deviceId + "/cmd/factory-reset").c_str());
-  } else {
-    Serial.printf(" failed (rc=%d), retry in 5s\n", _client.state());
-    delay(5000);
+  if (!ok) {
+    Serial.printf(" failed (rc=%d), retry in %lus\n",
+                  _client.state(), MQTT_RECONNECT_PERIOD_MS / 1000);
+    return;
   }
+
+  Serial.println(" connected");
+  publishStatus("online");
+
+  // Subscribe to add-sensor commands
+  _client.subscribe(("home/" + _deviceId + "/sensors/control/add").c_str());
+  // Subscribe to all actuator commands
+  _client.subscribe(("home/" + _deviceId + "/actuators/+/cmd/state").c_str());
+  // Subscribe to factory-reset command (sent by backend when device is deleted)
+  _client.subscribe(("home/" + _deviceId + "/cmd/factory-reset").c_str());
+}
+
+// Publish "offline" cleanly before a planned reboot (factory reset, OTA, etc).
+// Without this, the broker would have to wait for the LWT timeout (~7s).
+void MqttClient::publishOfflineAndDisconnect() {
+  if (!_started || !_client.connected()) return;
+  publishStatus("offline");
+  _client.loop();      // flush outgoing
+  delay(100);
+  _client.disconnect();
 }
 
 void MqttClient::publishSensorData(const String& sensorId, const JsonDocument& doc) {
+  if (!_client.connected()) return;
   String topic = "home/" + _deviceId + "/sensors/" + sensorId + "/data";
   String payload;
   serializeJson(doc, payload);
@@ -60,11 +85,13 @@ void MqttClient::publishSensorData(const String& sensorId, const JsonDocument& d
 }
 
 void MqttClient::publishStatus(const String& status) {
+  if (!_client.connected()) return;
   String topic = "home/" + _deviceId + "/status";
   _client.publish(topic.c_str(), status.c_str(), true); // retained
 }
 
 void MqttClient::publishDiscovery(const JsonDocument& doc) {
+  if (!_client.connected()) return;
   String topic = "home/" + _deviceId + "/sensors/discovery";
   String payload;
   serializeJson(doc, payload);
@@ -81,7 +108,7 @@ void MqttClient::handleMessage(const char* topic, const uint8_t* payload, unsign
   // Factory-reset: home/{deviceId}/cmd/factory-reset
   // Check this FIRST (before JSON parse — payload is plain text, not JSON)
   if (t == "home/" + _deviceId + "/cmd/factory-reset") {
-    Serial.println("[MQTT] Factory-reset command received — clearing NVS and restarting");
+    Serial.println("[MQTT] Factory-reset command received");
     if (_factoryResetCb) _factoryResetCb();
     return;
   }
@@ -102,7 +129,6 @@ void MqttClient::handleMessage(const char* topic, const uint8_t* payload, unsign
 
   // Actuator: home/{deviceId}/actuators/{type}/cmd/state
   if (t.startsWith("home/" + _deviceId + "/actuators/")) {
-    // Extract type from topic
     int start = ("home/" + _deviceId + "/actuators/").length();
     int end   = t.indexOf("/cmd/state");
     if (end > start) {

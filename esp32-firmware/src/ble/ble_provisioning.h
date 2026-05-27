@@ -29,6 +29,9 @@ public:
 
   void onProvisioningDone(DoneCallback cb) { _doneCb = cb; }
 
+  bool started() const { return _started; }
+
 private:
   DoneCallback _doneCb;
+  bool         _started = false;
 };

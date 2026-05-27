@@ -1,100 +1,96 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
-#include <HTTPClient.h>
 
 #include "config/config.h"
 #include "ble/ble_provisioning.h"
 #include "mqtt/mqtt_client.h"
 #include "sensors/sensor_manager.h"
+#include "wifi/wifi_check.h"
 
-static SensorManager sensorManager;
+static SensorManager   sensorManager;
 static BleProvisioning bleProvisioning;
 
-#define PIN_LED_BUILTIN 2  // Built-in blue LED on most ESP32 DevKit boards
+#define PIN_LED_BUILTIN          2  // Built-in blue LED on most ESP32 DevKit boards
 
-// ──────────────────────────────────────────────
-// Connectivity check (captive portal detection)
-// ──────────────────────────────────────────────
+#define WIFI_INITIAL_TIMEOUT_MS  10000UL  // first connect attempt: 10s before falling back to BLE
+#define WIFI_RECONNECT_PERIOD_MS 15000UL  // background reconnect attempts every 15s
 
-/// Returns true if behind a captive portal (redirect/intercept detected).
-/// Hits Google's 204 endpoint — real internet returns 204.
-/// HTTP -1 / negative = can't reach endpoint (no internet, DNS fail) — NOT a portal.
-/// Only treat as portal when server responds but redirects (200/301/302 etc.).
-static bool hasCaptivePortal() {
-  HTTPClient http;
-  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-  http.setTimeout(5000);
+// ── App state ────────────────────────────────────────────────────────────────
+// Simple state machine for clarity. Transitions are linear except WIFI_ONLINE
+// can drop back to WIFI_RECONNECTING (and back) without going through BLE.
 
-  if (!http.begin("http://connectivitycheck.gstatic.com/generate_204")) {
-    http.end();
-    Serial.println("[WiFi] Connectivity check: failed to init HTTP — assuming no internet, not portal");
-    return false; // can't init = no internet, not a captive portal
-  }
+enum class AppState {
+  Booting,           // initial, before setup runs
+  BleProvisioning,   // BLE only — not provisioned, captive portal, or WiFi failed
+  WifiConnecting,    // attempting first connection (blocking, in setup())
+  WifiOnline,        // connected, MQTT running
+  WifiReconnecting,  // dropped connection, trying to recover
+};
 
-  int code = http.GET();
-  http.end();
-  Serial.printf("[WiFi] Connectivity check: HTTP %d\n", code);
+static AppState      g_state                = AppState::Booting;
+static unsigned long g_lastWifiCheck        = 0;
+static bool          g_mqttBegun            = false;
+static bool          g_otaBegun             = false;
 
-  if (code < 0) {
-    // Negative = connection error (HTTPC_ERROR_CONNECTION_REFUSED, DNS fail, timeout)
-    // Not a portal — just no internet or DNS not working
-    Serial.println("[WiFi] Connectivity check: connection error — no internet (not a portal)");
-    return false;
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // Got a real HTTP response:
-  // 204 = internet OK, no portal
-  // anything else (200, 301, 302...) = captive portal intercept
-  return code != HTTP_CODE_NO_CONTENT;
+static void enterBleMode(const String& reason) {
+  Serial.printf("[State] Entering BLE provisioning mode (%s)\n", reason.c_str());
+  WiFi.disconnect(false);
+  WiFi.mode(WIFI_OFF);
+  delay(100);
+  bleProvisioning.begin("Domotique-" + WiFi.macAddress().substring(9));
+  g_state = AppState::BleProvisioning;
 }
 
-// ──────────────────────────────────────────────
-// WiFi
-// ──────────────────────────────────────────────
-void connectWifi() {
+// Blocking WiFi connect with a hard timeout. Used only at boot — once we're up,
+// reconnects are handled non-blockingly in loop().
+static bool blockingConnectWifi(unsigned long timeoutMs) {
   Config& cfg = Config::instance();
   Serial.printf("[WiFi] Connecting to %s...\n", cfg.wifiSsid.c_str());
+
+  WiFi.persistent(false);        // don't double-save credentials to ESP32 NVS
+  WiFi.setAutoReconnect(true);   // let the SDK retry transient drops in background
+  WiFi.mode(WIFI_STA);
   WiFi.begin(cfg.wifiSsid.c_str(), cfg.wifiPassword.c_str());
 
-  uint8_t attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
+    delay(250);
     Serial.print(".");
-    attempts++;
   }
+  Serial.println();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[WiFi] Connected — IP: %s\n", WiFi.localIP().toString().c_str());
-  } else {
-    Serial.println("\n[WiFi] Failed — entering BLE provisioning mode");
-    WiFi.disconnect(true); // stop retry loop so radio is free for WiFi scan
-    delay(100);
-    bleProvisioning.begin("Domotique-" + WiFi.macAddress().substring(9));
+    Serial.printf("[WiFi] Connected — IP: %s\n", WiFi.localIP().toString().c_str());
+    return true;
   }
+  Serial.println("[WiFi] Failed to connect within timeout");
+  return false;
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // OTA
-// ──────────────────────────────────────────────
-void setupOTA() {
+// ─────────────────────────────────────────────────────────────────────────────
+
+static void setupOTA() {
+  if (g_otaBegun) return;
   ArduinoOTA.setHostname("domotique-esp32");
-  ArduinoOTA.onStart([]() {
-    Serial.println("[OTA] Starting update...");
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\n[OTA] Done");
-  });
-  ArduinoOTA.onError([](ota_error_t e) {
-    Serial.printf("[OTA] Error[%u]\n", e);
-  });
+  ArduinoOTA.onStart([]() { Serial.println("[OTA] Starting update..."); });
+  ArduinoOTA.onEnd  ([]() { Serial.println("\n[OTA] Done"); });
+  ArduinoOTA.onError([](ota_error_t e) { Serial.printf("[OTA] Error[%u]\n", e); });
   ArduinoOTA.begin();
+  g_otaBegun = true;
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // MQTT callbacks
-// ──────────────────────────────────────────────
-void setupMqttCallbacks() {
+// ─────────────────────────────────────────────────────────────────────────────
+
+static void setupMqttCallbacks() {
   MqttClient::instance().onAddSensor([](const JsonObject& cmd) {
     bool ok = sensorManager.addSensor(cmd);
 
@@ -114,26 +110,47 @@ void setupMqttCallbacks() {
       if      (command == "on")     on = true;
       else if (command == "off")    on = false;
       else if (command == "toggle") on = !digitalRead(PIN_LED_BUILTIN);
-      else return;
+      else { Serial.println("[Actuator] Unknown LED command"); return; }
 
       digitalWrite(PIN_LED_BUILTIN, on ? HIGH : LOW);
       Serial.printf("[Actuator] LED %s\n", on ? "ON" : "OFF");
+    } else {
+      Serial.printf("[Actuator] Unsupported type: %s\n", type.c_str());
     }
   });
 
   // Factory-reset: backend deleted this device from the app.
-  // Clear NVS (WiFi + MQTT credentials) and restart into BLE provisioning.
+  // Publish "offline" cleanly, clear NVS, restart into BLE provisioning.
   MqttClient::instance().onFactoryReset([]() {
-    Serial.println("[Boot] Factory reset — erasing config and restarting...");
-    Config::instance().reset(); // erase all NVS keys
+    Serial.println("[FactoryReset] Erasing config + restarting...");
+    MqttClient::instance().publishOfflineAndDisconnect();
+    Config::instance().reset();
     delay(500);
     ESP.restart();
   });
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// State-specific bring-up
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Called once we have a verified, non-captive WiFi connection.
+static void enterOnlineMode() {
+  if (!g_mqttBegun) {
+    Config& cfg = Config::instance();
+    MqttClient::instance().begin(cfg.deviceId, cfg.mqttBroker, cfg.mqttPort);
+    setupMqttCallbacks();
+    g_mqttBegun = true;
+  }
+  setupOTA();
+  g_state = AppState::WifiOnline;
+  Serial.println("[State] WiFi online");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // setup / loop
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
 void setup() {
   Serial.begin(115200);
   Serial.println("\n[Boot] Domotique ESP32 firmware");
@@ -141,42 +158,87 @@ void setup() {
   Config& cfg = Config::instance();
   cfg.load();
 
-  if (!cfg.isProvisioned()) {
-    Serial.println("[Boot] Not provisioned — BLE mode");
-    bleProvisioning.begin("Domotique-Setup");
-    return; // loop will just handle BLE
-  }
-
   pinMode(PIN_LED_BUILTIN, OUTPUT);
   digitalWrite(PIN_LED_BUILTIN, LOW);
 
-  connectWifi();
+  if (!cfg.isProvisioned()) {
+    Serial.println("[Boot] Not provisioned");
+    enterBleMode("not provisioned");
+    return;
+  }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    if (hasCaptivePortal()) {
-      Serial.println("[WiFi] Captive portal detected — falling back to BLE mode");
-      cfg.lastError = "captive_portal";
-      cfg.save();
-      WiFi.disconnect(true); // prevent loop() MQTT block from running while in BLE mode
-      delay(100);
-      bleProvisioning.begin("Domotique-" + WiFi.macAddress().substring(9));
-      return; // loop() will handle BLE + update()
+  g_state = AppState::WifiConnecting;
+  if (!blockingConnectWifi(WIFI_INITIAL_TIMEOUT_MS)) {
+    enterBleMode("WiFi connect timeout");
+    return;
+  }
+
+  // Check captive portal — if we're behind one, MQTT will never reach the
+  // broker over the internet (still works for local LAN brokers, but most
+  // captive portals also block local subnets).
+  ConnectivityResult conn = checkConnectivity();
+  if (conn == ConnectivityResult::CaptivePortal) {
+    Serial.println("[Boot] Captive portal detected");
+    cfg.lastError = "captive_portal";
+    cfg.save();
+    enterBleMode("captive portal");
+    return;
+  }
+
+  enterOnlineMode();
+}
+
+// Monitor WiFi state in loop(). The SDK auto-reconnect handles transient blips,
+// but we also explicitly re-trigger WiFi.begin() if it stays down too long.
+static void monitorWifi() {
+  if (millis() - g_lastWifiCheck < 2000) return;  // throttle to every 2s
+  g_lastWifiCheck = millis();
+
+  const bool up = (WiFi.status() == WL_CONNECTED);
+
+  if (g_state == AppState::WifiOnline && !up) {
+    Serial.println("[WiFi] Connection lost — entering reconnect state");
+    g_state = AppState::WifiReconnecting;
+  } else if (g_state == AppState::WifiReconnecting && up) {
+    Serial.printf("[WiFi] Reconnected — IP: %s\n", WiFi.localIP().toString().c_str());
+    g_state = AppState::WifiOnline;
+  } else if (g_state == AppState::WifiReconnecting) {
+    // Kick the radio every 15s if SDK auto-reconnect hasn't recovered
+    static unsigned long lastKick = 0;
+    if (millis() - lastKick >= WIFI_RECONNECT_PERIOD_MS) {
+      lastKick = millis();
+      Config& cfg = Config::instance();
+      Serial.println("[WiFi] Re-issuing WiFi.begin()");
+      WiFi.disconnect(false);
+      WiFi.begin(cfg.wifiSsid.c_str(), cfg.wifiPassword.c_str());
     }
-
-    setupOTA();
-    MqttClient::instance().begin(cfg.deviceId, cfg.mqttBroker, cfg.mqttPort);
-    setupMqttCallbacks();
   }
 }
 
 void loop() {
-  // BLE mode: process deferred commands (e.g. WiFi scan) on the main task
+  // BLE mode: process deferred commands (WiFi scan / test). Always called —
+  // safe no-op if BLE not started.
   bleProvisioning.update();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    ArduinoOTA.handle();
-    MqttClient::instance().loop();
-    sensorManager.update();
+  switch (g_state) {
+    case AppState::WifiOnline:
+      ArduinoOTA.handle();
+      MqttClient::instance().loop();
+      sensorManager.update();
+      monitorWifi();
+      break;
+
+    case AppState::WifiReconnecting:
+      monitorWifi();
+      break;
+
+    case AppState::BleProvisioning:
+    case AppState::WifiConnecting:
+    case AppState::Booting:
+    default:
+      // Nothing to do — BLE provisioning is the only active subsystem.
+      break;
   }
+
   delay(10);
 }

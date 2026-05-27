@@ -302,12 +302,31 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
 
   // ── WiFi test ─────────────────────────────────────────────────────────
 
+  /// Map ESP32 wifi_test failure reasons to user-friendly French messages.
+  String _wifiErrorMessage(String? reason) {
+    switch (reason) {
+      case 'wrong_password':
+        return 'Mot de passe incorrect.';
+      case 'ssid_not_found':
+        return 'Réseau introuvable — l\'ESP32 ne voit pas ce SSID.';
+      case 'captive_portal':
+        return 'Ce réseau utilise un portail captif (page de connexion web). '
+            'L\'ESP32 ne peut pas s\'y authentifier — choisissez un autre réseau.';
+      case 'timeout':
+        return 'Timeout — mot de passe probablement incorrect ou signal trop faible.';
+      case 'empty_ssid':
+        return 'SSID vide — sélectionnez un réseau.';
+      default:
+        return 'Mot de passe incorrect ou réseau inaccessible.';
+    }
+  }
+
   /// Send test_wifi to ESP32 — it tries the credentials WITHOUT saving to NVS.
   /// Returns true if connected. On failure sets [_wifiFormError] and returns false.
   Future<bool> _testWifi(String ssid, String password) async {
     try {
       await _txChar!.setNotifyValue(true);
-      final completer = Completer<bool>();
+      final completer = Completer<Map<String, dynamic>>();
       final buffer = StringBuffer();
 
       final sub = _txChar!.onValueReceived.listen((data) {
@@ -315,7 +334,7 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
         try {
           final json = jsonDecode(buffer.toString()) as Map<String, dynamic>;
           if (json['type'] == BleConstants.responseWifiTest && !completer.isCompleted) {
-            completer.complete(json['status'] == 'connected');
+            completer.complete(json);
           }
         } catch (_) {
           // Incomplete JSON — keep accumulating chunks
@@ -331,14 +350,15 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
 
       try {
         // 20 s: 12 s WiFi timeout + margin for BLE reconnect after radio interference
-        final connected = await completer.future.timeout(
+        final result = await completer.future.timeout(
           const Duration(seconds: 20),
           onTimeout: () =>
               throw TimeoutException('L\'ESP32 n\'a pas répondu au test WiFi'),
         );
+        final connected = result['status'] == 'connected';
         if (!connected && mounted) {
           setState(() =>
-              _wifiFormError = 'Mot de passe incorrect ou réseau inaccessible');
+              _wifiFormError = _wifiErrorMessage(result['reason'] as String?));
         }
         return connected;
       } finally {
