@@ -13,6 +13,10 @@ void MqttClient::begin(const String& deviceId, const String& broker, uint16_t po
   _client.setServer(broker.c_str(), port);
   _client.setCallback(staticCallback);
   _client.setBufferSize(1024);
+  // Short keepalive → broker detects unclean disconnect faster → LWT fires in ~7s
+  // (broker waits 1.5 × keepalive before publishing "offline")
+  // Default PubSubClient = 15s → ~22s delay. 5s → ~7s.
+  _client.setKeepAlive(5);
 }
 
 void MqttClient::loop() {
