@@ -157,122 +157,23 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
   }
 
   Future<void> _showAddActuatorDialog() async {
-    final formKey  = GlobalKey<FormState>();
-    final nameCtrl = TextEditingController();
-    final pinCtrl  = TextEditingController();
-    String selectedType = 'led';
-
-    // Supported actuator types — extend as firmware adds more
-    const types = [
-      ('led',   'LED'),
-      ('relay', 'Relais'),
-      ('servo', 'Servo'),
-      ('buzzer','Buzzer'),
-    ];
-
-    await showDialog<void>(
+    final result = await showDialog<_ActuatorFormResult>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Ajouter un actionneur'),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                // ── Nom ───────────────────────────────────────────
-                TextFormField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Nom',
-                    hintText: 'Ex: LED salon',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  textCapitalization: TextCapitalization.sentences,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Champ requis' : null,
-                ),
-                const SizedBox(height: 12),
-
-                // ── Type ──────────────────────────────────────────
-                DropdownButtonFormField<String>(
-                  value: selectedType,
-                  decoration: const InputDecoration(
-                    labelText: 'Type',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: types
-                      .map((t) => DropdownMenuItem(
-                            value: t.$1,
-                            child: Text(t.$2),
-                          ))
-                      .toList(),
-                  onChanged: (v) =>
-                      setDialogState(() => selectedType = v ?? 'led'),
-                ),
-                const SizedBox(height: 12),
-
-                // ── Broche GPIO ───────────────────────────────────
-                TextFormField(
-                  controller: pinCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Broche GPIO',
-                    hintText: 'Ex: 2',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Champ requis';
-                    final n = int.tryParse(v.trim());
-                    if (n == null || n < 0 || n > 39) {
-                      return 'GPIO invalide (0–39)';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.pop(ctx);
-                try {
-                  await ref
-                      .read(actuatorsNotifierProvider(widget.deviceId).notifier)
-                      .create(
-                        type: selectedType,
-                        name: nameCtrl.text.trim(),
-                        pin:  int.parse(pinCtrl.text.trim()),
-                      );
-                } catch (_) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Erreur création actionneur')),
-                    );
-                  }
-                }
-              },
-              child: const Text('Ajouter'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => const _AddActuatorDialog(),
     );
+    if (result == null || !mounted) return;
 
-    nameCtrl.dispose();
-    pinCtrl.dispose();
+    try {
+      await ref
+          .read(actuatorsNotifierProvider(widget.deviceId).notifier)
+          .create(type: result.type, name: result.name, pin: result.pin);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur création actionneur')),
+        );
+      }
+    }
   }
 
   Future<void> _confirmDeleteActuator(ActuatorModel actuator) async {
@@ -529,6 +430,136 @@ class _ActuatorCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Add actuator dialog ──────────────────────────────────────────────────────
+// Proper StatefulWidget so the controllers are disposed at the right time by
+// Flutter — disposing them manually after `await showDialog(...)` triggered
+// 'failed assertion: _dependents.isEmpty' because the text fields were still
+// in the disposing widget tree.
+
+class _ActuatorFormResult {
+  final String type;
+  final String name;
+  final int    pin;
+  const _ActuatorFormResult(this.type, this.name, this.pin);
+}
+
+class _AddActuatorDialog extends StatefulWidget {
+  const _AddActuatorDialog();
+
+  @override
+  State<_AddActuatorDialog> createState() => _AddActuatorDialogState();
+}
+
+class _AddActuatorDialogState extends State<_AddActuatorDialog> {
+  static const _types = [
+    ('led',    'LED'),
+    ('relay',  'Relais'),
+    ('servo',  'Servo'),
+    ('buzzer', 'Buzzer'),
+  ];
+
+  final _formKey  = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _pinCtrl  = TextEditingController();
+  String _type = 'led';
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _pinCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      _ActuatorFormResult(
+        _type,
+        _nameCtrl.text.trim(),
+        int.parse(_pinCtrl.text.trim()),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Ajouter un actionneur'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Nom',
+                  hintText: 'Ex: LED salon',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.next,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Champ requis' : null,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _type,
+                decoration: const InputDecoration(
+                  labelText: 'Type',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: _types
+                    .map((t) => DropdownMenuItem(
+                          value: t.$1,
+                          child: Text(t.$2),
+                        ))
+                    .toList(),
+                onChanged: (v) => setState(() => _type = v ?? 'led'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _pinCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Broche GPIO',
+                  hintText: 'Ex: 2',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Champ requis';
+                  final n = int.tryParse(v.trim());
+                  if (n == null || n < 0 || n > 39) {
+                    return 'GPIO invalide (0–39)';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Ajouter'),
+        ),
+      ],
     );
   }
 }
