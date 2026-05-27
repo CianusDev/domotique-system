@@ -124,8 +124,13 @@ case "$CHOICE" in
     free_port
     echo -e "${RED}🗑️  Effacement complet de la flash...${RST}"
     echo ""
-    # esptool.py est livré avec PlatformIO
-    esptool.py --chip esp32 --port "$PORT" --baud 921600 erase_flash
+    # esptool.py livré avec PlatformIO (pas dans le PATH standard)
+    ESPTOOL="$HOME/.platformio/packages/tool-esptoolpy/esptool.py"
+    if [[ ! -f "$ESPTOOL" ]]; then
+      echo -e "${RED}❌  esptool.py introuvable : $ESPTOOL${RST}"
+      exit 1
+    fi
+    python3 "$ESPTOOL" --chip esp32 --port "$PORT" --baud 921600 erase_flash
     echo ""
     echo -e "${GRN}✅  Flash effacée. Re-flasher avec l'option 1 ou 2.${RST}"
     ;;
