@@ -485,13 +485,15 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 32,
       ),
-      child: switch (_step) {
-        _Step.bleScan      => _buildBleScan(),
-        _Step.configure    => _buildConfigure(),
-        _Step.wifiPick     => _buildWifiPick(),
-        _Step.provisioning => _buildProvisioning(),
-        _Step.done         => _buildDone(),
-      },
+      child: SingleChildScrollView(
+        child: switch (_step) {
+          _Step.bleScan      => _buildBleScan(),
+          _Step.configure    => _buildConfigure(),
+          _Step.wifiPick     => _buildWifiPick(),
+          _Step.provisioning => _buildProvisioning(),
+          _Step.done         => _buildDone(),
+        },
+      ),
     );
   }
 

@@ -175,11 +175,12 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Ajouter un actionneur'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 // ── Nom ───────────────────────────────────────────
                 TextFormField(
                   controller: nameCtrl,
@@ -235,6 +236,7 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
                 ),
               ],
             ),
+          ),
           ),
           actions: [
             TextButton(

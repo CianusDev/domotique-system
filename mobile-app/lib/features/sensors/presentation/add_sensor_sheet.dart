@@ -66,10 +66,11 @@ class _AddSensorSheetState extends ConsumerState<AddSensorSheet> {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
@@ -219,6 +220,7 @@ class _AddSensorSheetState extends ConsumerState<AddSensorSheet> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
