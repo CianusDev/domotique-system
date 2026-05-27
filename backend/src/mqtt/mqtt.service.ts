@@ -93,6 +93,19 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     this.publish(`home/${deviceId}/actuators/${type}/cmd/state`, payload);
   }
 
+  /**
+   * home/{deviceId}/cmd/factory-reset
+   * Published retained so the ESP32 receives it even if currently offline.
+   * On receipt the ESP32 clears NVS and reboots into BLE provisioning.
+   */
+  publishFactoryReset(deviceId: string): void {
+    this.client.publish(
+      `home/${deviceId}/cmd/factory-reset`,
+      'factory-reset',
+      { qos: 1, retain: true },
+    );
+  }
+
   // ── Subscribe & route ───────────────────────
 
   private subscribe() {

@@ -1,18 +1,18 @@
 class ApiConstants {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.32.182:5000/api',
+    defaultValue: 'http://192.168.1.245:5000/api',
   );
 
   /// WebSocket server root (no /api prefix — Socket.IO mounts at root)
   static const String wsUrl = String.fromEnvironment(
     'WS_URL',
-    defaultValue: 'http://192.168.32.182:5000',
+    defaultValue: 'http://192.168.1.245:5000',
   );
 
   static const String mqttBroker = String.fromEnvironment(
     'MQTT_BROKER',
-    defaultValue: '192.168.32.182',
+    defaultValue: '192.168.1.245',
   );
 
   // Auth

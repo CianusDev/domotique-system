@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateSensorTypeDto } from './dto/create-sensor-type.dto';
 import { SensorTypesRepository } from './sensor-types.repository';
 
@@ -24,7 +28,8 @@ export class SensorTypesService {
 
   async create(dto: CreateSensorTypeDto) {
     const existing = await this.repo.findByType(dto.type);
-    if (existing) throw new ConflictException(`Sensor type "${dto.type}" already exists`);
+    if (existing)
+      throw new ConflictException(`Sensor type "${dto.type}" already exists`);
     return this.repo.create(dto as any);
   }
 }

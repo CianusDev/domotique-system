@@ -24,9 +24,9 @@ import { GatewayModule } from './gateway/gateway.module';
     ConfigModule.forRoot({ envFilePath: '.env', isGlobal: true }),
     EventEmitterModule.forRoot(),
     ThrottlerModule.forRoot([
-      { name: 'short',  ttl: 5000,  limit: 10  },
-      { name: 'medium', ttl: 20000, limit: 20  },
-      { name: 'long',   ttl: 80000, limit: 100 },
+      { name: 'short', ttl: 5000, limit: 10 },
+      { name: 'medium', ttl: 20000, limit: 20 },
+      { name: 'long', ttl: 80000, limit: 100 },
     ]),
     PrismaModule,
     AuthModule,

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { DeviceStatus } from 'generated/prisma/client';
-import { MQTT_EVENTS } from 'src/mqtt/mqtt.service';
+import { MqttService, MQTT_EVENTS } from 'src/mqtt/mqtt.service';
 import type { MqttDeviceStatusEvent } from 'src/mqtt/mqtt.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
@@ -13,7 +13,10 @@ import { DevicesRepository } from './devices.repository';
 
 @Injectable()
 export class DevicesService {
-  constructor(private readonly devicesRepository: DevicesRepository) {}
+  constructor(
+    private readonly devicesRepository: DevicesRepository,
+    private readonly mqttService: MqttService,
+  ) {}
 
   findAll(userId: string) {
     return this.devicesRepository.findAll(userId);
@@ -42,6 +45,11 @@ export class DevicesService {
 
   async delete(id: string, userId: string) {
     await this.findOne(id, userId);
+    // Publish retained factory-reset command BEFORE deleting the DB record.
+    // The ESP32 will receive it (even if currently offline — retained message
+    // is delivered on its next MQTT connect) and clear its NVS credentials,
+    // forcing it back into BLE provisioning mode.
+    this.mqttService.publishFactoryReset(id);
     return this.devicesRepository.delete(id);
   }
 

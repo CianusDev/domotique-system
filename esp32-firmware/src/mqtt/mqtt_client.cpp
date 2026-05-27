@@ -40,6 +40,8 @@ void MqttClient::reconnect() {
     _client.subscribe(("home/" + _deviceId + "/sensors/control/add").c_str());
     // Subscribe to all actuator commands
     _client.subscribe(("home/" + _deviceId + "/actuators/+/cmd/state").c_str());
+    // Subscribe to factory-reset command (sent by backend when device is deleted)
+    _client.subscribe(("home/" + _deviceId + "/cmd/factory-reset").c_str());
   } else {
     Serial.printf(" failed (rc=%d), retry in 5s\n", _client.state());
     delay(5000);
@@ -70,6 +72,16 @@ void MqttClient::staticCallback(char* topic, uint8_t* payload, unsigned int len)
 }
 
 void MqttClient::handleMessage(const char* topic, const uint8_t* payload, unsigned int len) {
+  String t(topic);
+
+  // Factory-reset: home/{deviceId}/cmd/factory-reset
+  // Check this FIRST (before JSON parse — payload is plain text, not JSON)
+  if (t == "home/" + _deviceId + "/cmd/factory-reset") {
+    Serial.println("[MQTT] Factory-reset command received — clearing NVS and restarting");
+    if (_factoryResetCb) _factoryResetCb();
+    return;
+  }
+
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, payload, len);
   if (err) {
@@ -77,7 +89,6 @@ void MqttClient::handleMessage(const char* topic, const uint8_t* payload, unsign
     return;
   }
 
-  String t(topic);
   String addTopic = "home/" + _deviceId + "/sensors/control/add";
 
   if (t == addTopic) {

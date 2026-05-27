@@ -118,6 +118,15 @@ void setupMqttCallbacks() {
       Serial.printf("[Actuator] LED %s\n", on ? "ON" : "OFF");
     }
   });
+
+  // Factory-reset: backend deleted this device from the app.
+  // Clear NVS (WiFi + MQTT credentials) and restart into BLE provisioning.
+  MqttClient::instance().onFactoryReset([]() {
+    Serial.println("[Boot] Factory reset — erasing config and restarting...");
+    Config::instance().reset(); // erase all NVS keys
+    delay(500);
+    ESP.restart();
+  });
 }
 
 // ──────────────────────────────────────────────

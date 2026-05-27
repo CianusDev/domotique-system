@@ -1,4 +1,12 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import type { ControllerResponse } from 'src/config/config.interface';
 import { SensorTypesService } from './sensor-types.service';
 import { CreateSensorTypeDto } from './dto/create-sensor-type.dto';

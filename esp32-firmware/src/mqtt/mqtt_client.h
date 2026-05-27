@@ -34,6 +34,11 @@ public:
   using ActuatorCallback = std::function<void(const String& type, const JsonObject&)>;
   void onActuator(ActuatorCallback cb) { _actuatorCb = cb; }
 
+  // Called when backend sends factory-reset (device deleted from app).
+  // Handler should clear NVS credentials and restart the ESP32.
+  using FactoryResetCallback = std::function<void()>;
+  void onFactoryReset(FactoryResetCallback cb) { _factoryResetCb = cb; }
+
 private:
   MqttClient() = default;
   void reconnect();
@@ -46,6 +51,7 @@ private:
   String        _broker;
   uint16_t      _port = 1883;
 
-  AddSensorCallback _addSensorCb;
-  ActuatorCallback  _actuatorCb;
+  AddSensorCallback    _addSensorCb;
+  ActuatorCallback     _actuatorCb;
+  FactoryResetCallback _factoryResetCb;
 };
