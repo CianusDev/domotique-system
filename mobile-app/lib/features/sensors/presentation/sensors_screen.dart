@@ -116,14 +116,14 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Actuateurs ──────────────────────────────────────────
+          // ── Actionneurs ─────────────────────────────────────────
           _SectionHeader(
-            title: 'Actuateurs',
+            title: 'Actionneurs',
             onAdd: () => _showAddActuatorDialog(),
           ),
           const SizedBox(height: 8),
           if (actuators.isEmpty)
-            _EmptySection(label: 'Aucun actuateur — appuyez sur + pour ajouter')
+            _EmptySection(label: 'Aucun actionneur — appuyez sur + pour ajouter')
           else
             ...actuators.map((a) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -157,55 +157,127 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
   }
 
   Future<void> _showAddActuatorDialog() async {
-    final nameCtrl = TextEditingController(text: 'LED Bleue');
+    final formKey  = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    final pinCtrl  = TextEditingController();
+    String selectedType = 'led';
+
+    // Supported actuator types — extend as firmware adds more
+    const types = [
+      ('led',   'LED'),
+      ('relay', 'Relais'),
+      ('servo', 'Servo'),
+      ('buzzer','Buzzer'),
+    ];
+
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Ajouter LED'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Nom'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Ajouter un actionneur'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Nom ───────────────────────────────────────────
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nom',
+                    hintText: 'Ex: LED salon',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  textCapitalization: TextCapitalization.sentences,
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Champ requis' : null,
+                ),
+                const SizedBox(height: 12),
+
+                // ── Type ──────────────────────────────────────────
+                DropdownButtonFormField<String>(
+                  value: selectedType,
+                  decoration: const InputDecoration(
+                    labelText: 'Type',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: types
+                      .map((t) => DropdownMenuItem(
+                            value: t.$1,
+                            child: Text(t.$2),
+                          ))
+                      .toList(),
+                  onChanged: (v) =>
+                      setDialogState(() => selectedType = v ?? 'led'),
+                ),
+                const SizedBox(height: 12),
+
+                // ── Broche GPIO ───────────────────────────────────
+                TextFormField(
+                  controller: pinCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Broche GPIO',
+                    hintText: 'Ex: 2',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Champ requis';
+                    final n = int.tryParse(v.trim());
+                    if (n == null || n < 0 || n > 39) {
+                      return 'GPIO invalide (0–39)';
+                    }
+                    return null;
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            const Text('Type: LED  •  GPIO: 2 (built-in)',
-                style: TextStyle(fontSize: 12)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                Navigator.pop(ctx);
+                try {
+                  await ref
+                      .read(actuatorsNotifierProvider(widget.deviceId).notifier)
+                      .create(
+                        type: selectedType,
+                        name: nameCtrl.text.trim(),
+                        pin:  int.parse(pinCtrl.text.trim()),
+                      );
+                } catch (_) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Erreur création actionneur')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Ajouter'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await ref
-                    .read(actuatorsNotifierProvider(widget.deviceId).notifier)
-                    .create(type: 'led', name: nameCtrl.text.trim(), pin: 2);
-              } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Erreur création actuateur')),
-                  );
-                }
-              }
-            },
-            child: const Text('Ajouter'),
-          ),
-        ],
       ),
     );
+
+    nameCtrl.dispose();
+    pinCtrl.dispose();
   }
 
   Future<void> _confirmDeleteActuator(ActuatorModel actuator) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer'),
+        title: const Text('Supprimer l\'actionneur'),
         content: Text('Supprimer "${actuator.name}" ?'),
         actions: [
           TextButton(
@@ -230,7 +302,7 @@ class _SensorsScreenState extends ConsumerState<SensorsScreen> {
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Erreur suppression')),
+            const SnackBar(content: Text('Erreur suppression actionneur')),
           );
         }
       }
