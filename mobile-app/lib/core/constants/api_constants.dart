@@ -1,13 +1,13 @@
 class ApiConstants {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.35.182:5000/api',
+    defaultValue: 'https://iot-backend.cianus.space/api',
   );
 
   /// WebSocket server root (no /api prefix — Socket.IO mounts at root)
   static const String wsUrl = String.fromEnvironment(
     'WS_URL',
-    defaultValue: 'http://192.168.35.182:5000',
+    defaultValue: 'https://iot-backend.cianus.space',
   );
 
   static const String mqttBroker = String.fromEnvironment(
