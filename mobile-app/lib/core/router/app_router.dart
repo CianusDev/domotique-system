@@ -77,7 +77,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/reset-password',
         builder: (_, state) => ResetPasswordScreen(
-          token: state.extra as String? ?? '',
+          initialEmail: state.extra as String? ?? '',
         ),
       ),
 

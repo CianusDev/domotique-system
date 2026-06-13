@@ -8,8 +8,8 @@ import '../../../shared/widgets/primary_button.dart';
 import '../data/auth_repository.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
-  final String token; // UUID token from email link
-  const ResetPasswordScreen({super.key, required this.token});
+  final String initialEmail;
+  const ResetPasswordScreen({super.key, this.initialEmail = ''});
 
   @override
   ConsumerState<ResetPasswordScreen> createState() =>
@@ -18,7 +18,9 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _tokenCtrl = TextEditingController();
+  late final _emailCtrl =
+      TextEditingController(text: widget.initialEmail);
+  final _codeCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _loading = false;
@@ -28,15 +30,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    // Pre-fill token if passed via deep link / extra
-    if (widget.token.isNotEmpty) _tokenCtrl.text = widget.token;
-  }
-
-  @override
   void dispose() {
-    _tokenCtrl.dispose();
+    _emailCtrl.dispose();
+    _codeCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
@@ -50,7 +46,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     });
     try {
       await ref.read(authRepositoryProvider).resetPassword(
-            token: _tokenCtrl.text.trim(),
+            email: _emailCtrl.text.trim(),
+            code: _codeCtrl.text.trim(),
             newPassword: _passwordCtrl.text,
           );
       setState(() => _done = true);
@@ -101,7 +98,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Collez le token reçu par e-mail, puis choisissez un nouveau mot de passe.',
+            'Entrez le code à 6 chiffres reçu par e-mail, puis choisissez un nouveau mot de passe.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -117,12 +114,30 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
           ],
 
           AppTextField(
-            controller: _tokenCtrl,
-            label: 'Token de réinitialisation',
+            controller: _emailCtrl,
+            label: 'Adresse e-mail',
+            keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             enabled: !_loading,
-            validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Token requis' : null,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'Champ requis';
+              if (!v.contains('@')) return 'Email invalide';
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+
+          AppTextField(
+            controller: _codeCtrl,
+            label: 'Code à 6 chiffres',
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.next,
+            enabled: !_loading,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'Champ requis';
+              if (v.trim().length != 6) return 'Le code doit contenir 6 chiffres';
+              return null;
+            },
           ),
           const SizedBox(height: 16),
 

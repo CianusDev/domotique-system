@@ -111,12 +111,12 @@ export class AuthService {
     if (!existingUser) {
       return true;
     }
-    const link = await this.otpService.generateResetLinkOTP(existingUser.email);
+    const otp = await this.otpService.generateOTP(existingUser.email);
     await this.emailService.sendEmail({
       to: existingUser.email,
-      subject: emailTemplates.resetPasswordLink.subject,
-      html: emailTemplates.resetPasswordLink.html({
-        link,
+      subject: emailTemplates.resetPasswordOtp.subject,
+      html: emailTemplates.resetPasswordOtp.html({
+        code: otp.code,
         fullName: this.fullName(existingUser.firstName, existingUser.lastName),
       }),
     });
@@ -172,12 +172,12 @@ export class AuthService {
     if (!user) {
       return true;
     }
-    const link = await this.otpService.generateResetLinkOTP(user.email);
+    const otp = await this.otpService.generateOTP(user.email);
     await this.emailService.sendEmail({
       to: user.email,
-      subject: emailTemplates.resetPasswordLink.subject,
-      html: emailTemplates.resetPasswordLink.html({
-        link,
+      subject: emailTemplates.resetPasswordOtp.subject,
+      html: emailTemplates.resetPasswordOtp.html({
+        code: otp.code,
         fullName: this.fullName(user.firstName, user.lastName),
       }),
     });
@@ -185,13 +185,16 @@ export class AuthService {
   }
 
   async resetPassword(data: VerifyResetPasswordDto) {
-    const otp = await this.otpService.verifyResetLinkOTP(data.token);
-    if (!otp) {
-      throw new BadRequestException('Invalid or expired reset password token.');
+    const isValid = await this.otpService.verifyOTP({
+      email: data.email,
+      code: data.code,
+    });
+    if (!isValid) {
+      throw new BadRequestException('Code invalide ou expiré.');
     }
 
     const updatedUser = await this.userService.resetPassword({
-      email: otp.email,
+      email: data.email,
       newPassword: await this.hashPassword(data.newPassword),
     });
 

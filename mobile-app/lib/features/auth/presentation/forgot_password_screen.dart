@@ -88,7 +88,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Entrez votre e-mail et nous vous enverrons un lien de réinitialisation.',
+            'Entrez votre e-mail et nous vous enverrons un code de réinitialisation.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -117,7 +117,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 24),
           PrimaryButton(
-            label: 'Envoyer le lien',
+            label: 'Envoyer le code',
             onPressed: _loading ? null : _submit,
             loading: _loading,
           ),
@@ -145,7 +145,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Consultez votre boîte mail pour réinitialiser votre mot de passe.',
+          'Consultez votre boîte mail et entrez le code à 6 chiffres reçu.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -153,8 +153,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 32),
         FilledButton(
-          onPressed: () => context.go('/reset-password'),
-          child: const Text("Entrer le token reçu"),
+          onPressed: () => context.go('/reset-password', extra: _emailCtrl.text.trim()),
+          child: const Text("Entrer le code reçu"),
         ),
         const SizedBox(height: 12),
         TextButton(

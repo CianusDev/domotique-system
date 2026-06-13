@@ -69,13 +69,15 @@ class AuthRepository {
     );
   }
 
-  /// Resets password using UUID token from email link.
+  /// Resets password using 6-digit OTP received by email.
   Future<void> resetPassword({
-    required String token,
+    required String email,
+    required String code,
     required String newPassword,
   }) async {
     await _dio.post(ApiConstants.resetPassword, data: {
-      'token': token,
+      'email': email,
+      'code': code,
       'newPassword': newPassword,
     });
   }
