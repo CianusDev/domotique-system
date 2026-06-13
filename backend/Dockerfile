@@ -13,4 +13,4 @@ RUN test -f dist/src/main.js || (echo "ERROR: dist/src/main.js missing — build
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/src/main"]

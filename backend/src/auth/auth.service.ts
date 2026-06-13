@@ -156,7 +156,14 @@ export class AuthService {
     const token = this.jwtService.sign(payload);
     return {
       access_token: token,
-      user: updatedUser,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        emailVerified: updatedUser.emailVerified,
+      },
     };
   }
 
@@ -196,7 +203,14 @@ export class AuthService {
     const token = this.jwtService.sign(payload);
     return {
       access_token: token,
-      user: updatedUser,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        emailVerified: updatedUser.emailVerified,
+      },
     };
   }
 
