@@ -17,7 +17,6 @@ import { ACCESS_TOKEN_MAX_AGE } from 'src/config/constants';
 import { UserWithoutPassword } from 'src/users/users.interface';
 import { AuthService } from './auth.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResendVerificationEmailDto } from './dto/resend-verification-email';
 import { ResendResetPasswordDto } from './dto/resend-reset-password';
@@ -193,5 +192,4 @@ export class AuthController {
       message: 'User logged out successfully',
     };
   }
-
 }

@@ -11,7 +11,7 @@ export type EmailTemplates = {
   };
 };
 
-const appName = APP_NAME;
+const appName = process.env.APP_NAME || APP_NAME;
 export const emailTemplates: EmailTemplates = {
   verificationEmail: {
     subject: `Bienvenue sur ${appName} !`,
