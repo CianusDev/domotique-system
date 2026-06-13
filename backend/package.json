@@ -3,17 +3,6 @@
   "version": "0.0.1",
   "description": "",
   "author": "",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@nestjs/core",
-      "@prisma/engines",
-      "@scarf/scarf",
-      "bcrypt",
-      "esbuild",
-      "prisma",
-      "unrs-resolver"
-    ]
-  },
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
