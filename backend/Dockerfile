@@ -5,15 +5,17 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-# --ignore-scripts skips native build scripts (bcrypt removed, prisma generated manually)
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# No --frozen-lockfile: pnpm reads pnpm-workspace.yaml for onlyBuiltDependencies
+# allowing prisma/esbuild/etc. build scripts to run
+RUN pnpm install --prefer-frozen-lockfile
 
 COPY . .
 
-# Generate Prisma client (downloads binary) + compile TypeScript
-RUN node_modules/.bin/prisma generate && pnpm build
+RUN pnpm prisma generate && pnpm build
+
+# Fail fast if build produced no output
+RUN test -f dist/main.js || (echo "ERROR: dist/main.js missing — build failed" && exit 1)
 
 EXPOSE 5000
 
-# Run migrations then start
 CMD ["sh", "-c", "pnpm prisma migrate deploy && node dist/main"]
