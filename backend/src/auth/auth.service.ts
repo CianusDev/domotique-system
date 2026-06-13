@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { emailTemplates } from 'src/config/email-templates';
 import { EmailService } from 'src/email/email.service';
 import { OtpService } from 'src/otp/otp.service';
