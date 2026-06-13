@@ -22,6 +22,7 @@ services:
     entrypoint: >
       sh -c "rm -f /mosquitto/config/passwd
       && mosquitto_passwd -c -b /mosquitto/config/passwd $$MQTT_USER $$MQTT_PASSWORD
+      && chown mosquitto:mosquitto /mosquitto/config/passwd
       && exec mosquitto -c /mosquitto/config/mosquitto.conf"
     environment:
       MQTT_USER: ${MQTT_USER}
