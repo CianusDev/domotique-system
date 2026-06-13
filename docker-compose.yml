@@ -20,7 +20,8 @@ services:
     container_name: domotique-mqtt
     restart: always
     entrypoint: >
-      sh -c "mosquitto_passwd -c -b /mosquitto/config/passwd $$MQTT_USER $$MQTT_PASSWORD
+      sh -c "rm -f /mosquitto/config/passwd
+      && mosquitto_passwd -c -b /mosquitto/config/passwd $$MQTT_USER $$MQTT_PASSWORD
       && exec mosquitto -c /mosquitto/config/mosquitto.conf"
     environment:
       MQTT_USER: ${MQTT_USER}
