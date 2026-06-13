@@ -12,7 +12,7 @@ class ApiConstants {
 
   static const String mqttBroker = String.fromEnvironment(
     'MQTT_BROKER',
-    defaultValue: '192.168.35.182',
+    defaultValue: 'iot-backend.cianus.space',
   );
 
   // Auth
