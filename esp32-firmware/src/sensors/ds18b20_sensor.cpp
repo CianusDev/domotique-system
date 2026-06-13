@@ -3,7 +3,12 @@
 
 Ds18b20Sensor::Ds18b20Sensor(Config cfg) : SensorBase(cfg) {}
 
-bool Ds18b20Sensor::begin() {
+Ds18b20Sensor::~Ds18b20Sensor() {
+  delete _sensors;
+  delete _oneWire;
+}
+
+bool Ds18b20Sensor::begin(const JsonObject& /* params */) {
   _oneWire  = new OneWire(_cfg.pin);
   _sensors  = new DallasTemperature(_oneWire);
   _sensors->begin();

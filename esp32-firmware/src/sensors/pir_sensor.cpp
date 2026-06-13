@@ -3,7 +3,7 @@
 
 PirSensor::PirSensor(Config cfg) : SensorBase(cfg) {}
 
-bool PirSensor::begin() {
+bool PirSensor::begin(const JsonObject& /* params */) {
   pinMode(_cfg.pin, INPUT);
   return true;
 }

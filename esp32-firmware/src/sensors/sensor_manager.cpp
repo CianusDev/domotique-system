@@ -10,7 +10,10 @@ bool SensorManager::addSensor(const JsonObject& cmd) {
   uint8_t pin     = cmd["pin"].as<uint8_t>();
 
   if (sensorId.isEmpty() || type.isEmpty()) return false;
-  if (_sensors.count(sensorId)) return false; // already exists
+  if (_sensors.count(sensorId)) {
+    Serial.printf("[SensorManager] Sensor %s already registered — skipping\n", sensorId.c_str());
+    return true;  // idempotent: already running, not an error
+  }
   if (isPinTaken(pin)) {
     Serial.printf("[SensorManager] Pin %d already in use\n", pin);
     return false;
@@ -20,10 +23,6 @@ bool SensorManager::addSensor(const JsonObject& cmd) {
   cfg.sensorId = sensorId;
   cfg.type     = type;
   cfg.pin      = pin;
-  // params are optional extra config
-  if (cmd["params"].is<JsonObject>()) {
-    cfg.params = cmd["params"].as<JsonObject>();
-  }
 
   std::unique_ptr<SensorBase> sensor;
 
@@ -37,7 +36,9 @@ bool SensorManager::addSensor(const JsonObject& cmd) {
     return false;
   }
 
-  if (!sensor->begin()) {
+  // params are valid only during this call (owned by caller's JsonDocument)
+  JsonObject params = cmd["params"].is<JsonObject>() ? cmd["params"].as<JsonObject>() : JsonObject{};
+  if (!sensor->begin(params)) {
     Serial.printf("[SensorManager] begin() failed for %s on pin %d\n", type.c_str(), pin);
     return false;
   }

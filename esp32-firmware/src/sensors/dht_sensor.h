@@ -5,7 +5,8 @@
 class DhtSensor : public SensorBase {
 public:
   explicit DhtSensor(Config cfg);
-  bool begin() override;
+  ~DhtSensor() override;
+  bool begin(const JsonObject& params) override;
   void update() override;
   void toJson(JsonObject& out) override;
 

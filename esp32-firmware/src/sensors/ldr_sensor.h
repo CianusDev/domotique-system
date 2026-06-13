@@ -20,7 +20,7 @@ public:
   static constexpr uint16_t ADC_MAX             = 4095;
 
   explicit LdrSensor(Config cfg);
-  bool begin()  override;
+  bool begin(const JsonObject& params)  override;
   void update() override;
   void toJson(JsonObject& out) override;
 

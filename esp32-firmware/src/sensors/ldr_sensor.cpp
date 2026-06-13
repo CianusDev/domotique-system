@@ -3,11 +3,10 @@
 
 LdrSensor::LdrSensor(Config cfg) : SensorBase(cfg) {}
 
-bool LdrSensor::begin() {
-  // Override interval from backend params if provided
-  if (_cfg.params["interval_ms"].is<uint32_t>()) {
-    _intervalMs = _cfg.params["interval_ms"].as<uint32_t>();
-    if (_intervalMs < 500) _intervalMs = 500; // floor 500 ms
+bool LdrSensor::begin(const JsonObject& params) {
+  if (params["interval_ms"].is<uint32_t>()) {
+    _intervalMs = params["interval_ms"].as<uint32_t>();
+    if (_intervalMs < 500) _intervalMs = 500;
   }
 
   // ADC pins on ESP32: 32-39 are input-only, 0,2,4,12-15,25-27,34-39 are ADC capable.

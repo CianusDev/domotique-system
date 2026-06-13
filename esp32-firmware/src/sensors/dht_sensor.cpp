@@ -3,7 +3,9 @@
 
 DhtSensor::DhtSensor(Config cfg) : SensorBase(cfg) {}
 
-bool DhtSensor::begin() {
+DhtSensor::~DhtSensor() { delete _dht; }
+
+bool DhtSensor::begin(const JsonObject& /* params */) {
   uint8_t dhtType = (_cfg.type == "DHT11") ? DHT11 : DHT22;
   _dht = new DHT(_cfg.pin, dhtType);
   _dht->begin();

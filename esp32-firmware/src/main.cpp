@@ -30,8 +30,12 @@ enum class AppState {
 
 static AppState      g_state                = AppState::Booting;
 static unsigned long g_lastWifiCheck        = 0;
+static unsigned long g_reconnectingSince    = 0;
 static bool          g_mqttBegun            = false;
 static bool          g_otaBegun             = false;
+static String        g_macSuffix;  // last 6 hex chars of MAC, set once at boot
+
+#define WIFI_RECONNECT_RESTART_MS (30UL * 60UL * 1000UL)  // restart after 30min offline
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -42,7 +46,7 @@ static void enterBleMode(const String& reason) {
   WiFi.disconnect(false);
   WiFi.mode(WIFI_OFF);
   delay(100);
-  bleProvisioning.begin("Domotique-" + WiFi.macAddress().substring(9));
+  bleProvisioning.begin("Domotique-" + g_macSuffix);
   g_state = AppState::BleProvisioning;
 }
 
@@ -78,7 +82,8 @@ static bool blockingConnectWifi(unsigned long timeoutMs) {
 
 static void setupOTA() {
   if (g_otaBegun) return;
-  ArduinoOTA.setHostname("domotique-esp32");
+  static String hostname = "domotique-" + g_macSuffix;
+  ArduinoOTA.setHostname(hostname.c_str());
   ArduinoOTA.onStart([]() { Serial.println("[OTA] Starting update..."); });
   ArduinoOTA.onEnd  ([]() { Serial.println("\n[OTA] Done"); });
   ArduinoOTA.onError([](ota_error_t e) { Serial.printf("[OTA] Error[%u]\n", e); });
@@ -156,6 +161,13 @@ void setup() {
   Serial.begin(115200);
   Serial.println("\n[Boot] Domotique ESP32 firmware");
 
+  // Read MAC before any state changes — works even before WiFi.begin()
+  WiFi.mode(WIFI_STA);
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  g_macSuffix = mac.substring(6);  // last 6 hex chars, e.g. "1A2B3C"
+  Serial.printf("[Boot] Device suffix: %s\n", g_macSuffix.c_str());
+
   Config& cfg = Config::instance();
   cfg.load();
 
@@ -199,12 +211,16 @@ static void monitorWifi() {
 
   if (g_state == AppState::WifiOnline && !up) {
     Serial.println("[WiFi] Connection lost — entering reconnect state");
+    g_reconnectingSince = millis();
     g_state = AppState::WifiReconnecting;
   } else if (g_state == AppState::WifiReconnecting && up) {
     Serial.printf("[WiFi] Reconnected — IP: %s\n", WiFi.localIP().toString().c_str());
     g_state = AppState::WifiOnline;
   } else if (g_state == AppState::WifiReconnecting) {
-    // Kick the radio every 15s if SDK auto-reconnect hasn't recovered
+    if (millis() - g_reconnectingSince >= WIFI_RECONNECT_RESTART_MS) {
+      Serial.println("[WiFi] 30min offline — restarting to retry boot sequence");
+      ESP.restart();
+    }
     static unsigned long lastKick = 0;
     if (millis() - lastKick >= WIFI_RECONNECT_PERIOD_MS) {
       lastKick = millis();

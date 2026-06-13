@@ -6,7 +6,8 @@
 class Ds18b20Sensor : public SensorBase {
 public:
   explicit Ds18b20Sensor(Config cfg);
-  bool begin() override;
+  ~Ds18b20Sensor() override;
+  bool begin(const JsonObject& params) override;
   void update() override;
   void toJson(JsonObject& out) override;
 
