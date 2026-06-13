@@ -138,7 +138,8 @@ static void setupMqttCallbacks() {
 static void enterOnlineMode() {
   if (!g_mqttBegun) {
     Config& cfg = Config::instance();
-    MqttClient::instance().begin(cfg.deviceId, cfg.mqttBroker, cfg.mqttPort);
+    MqttClient::instance().begin(cfg.deviceId, cfg.mqttBroker, cfg.mqttPort,
+                                 cfg.mqttUser, cfg.mqttPassword);
     setupMqttCallbacks();
     g_mqttBegun = true;
   }

@@ -11,6 +11,8 @@ void Config::load() {
   wifiPassword = _prefs.getString("wifi_pass", "");
   mqttBroker   = _prefs.getString("mqtt_host", "");
   mqttPort     = _prefs.getUShort("mqtt_port", 1883);
+  mqttUser     = _prefs.getString("mqtt_user", "");
+  mqttPassword = _prefs.getString("mqtt_pass", "");
   deviceId     = _prefs.getString("device_id", "");
   lastError    = _prefs.getString("last_err",  "");
   _prefs.end();
@@ -22,6 +24,8 @@ void Config::save() {
   _prefs.putString("wifi_pass", wifiPassword);
   _prefs.putString("mqtt_host", mqttBroker);
   _prefs.putUShort("mqtt_port", mqttPort);
+  _prefs.putString("mqtt_user", mqttUser);
+  _prefs.putString("mqtt_pass", mqttPassword);
   _prefs.putString("device_id", deviceId);
   _prefs.putString("last_err",  lastError);
   _prefs.end();

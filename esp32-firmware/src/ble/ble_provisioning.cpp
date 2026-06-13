@@ -182,10 +182,12 @@ static void doWifiTest() {
 // already validated WiFi via test_wifi, so no further connectivity check here.
 
 static void doProvision(const JsonDocument& doc) {
-  const String ssid       = doc["ssid"].as<String>();
-  const String pass       = doc["password"].as<String>();
-  const String mqttBroker = doc["mqttBroker"].as<String>();
-  const String deviceId   = doc["deviceId"].as<String>();
+  const String ssid         = doc["ssid"].as<String>();
+  const String pass         = doc["password"].as<String>();
+  const String mqttBroker   = doc["mqttBroker"].as<String>();
+  const String mqttUser     = doc["mqttUser"].as<String>();
+  const String mqttPassword = doc["mqttPassword"].as<String>();
+  const String deviceId     = doc["deviceId"].as<String>();
 
   if (ssid.isEmpty() || deviceId.isEmpty() || mqttBroker.isEmpty()) {
     Serial.println("[BLE] Provision rejected — missing required field");
@@ -193,12 +195,14 @@ static void doProvision(const JsonDocument& doc) {
     return;
   }
 
-  Config& cfg      = Config::instance();
-  cfg.wifiSsid     = ssid;
-  cfg.wifiPassword = pass;
-  cfg.mqttBroker   = mqttBroker;
-  cfg.deviceId     = deviceId;
-  cfg.lastError    = ""; // clear any previous boot error
+  Config& cfg        = Config::instance();
+  cfg.wifiSsid       = ssid;
+  cfg.wifiPassword   = pass;
+  cfg.mqttBroker     = mqttBroker;
+  cfg.mqttUser       = mqttUser;
+  cfg.mqttPassword   = mqttPassword;
+  cfg.deviceId       = deviceId;
+  cfg.lastError      = ""; // clear any previous boot error
   cfg.save();
 
   Serial.println("[BLE] Provisioned — rebooting");

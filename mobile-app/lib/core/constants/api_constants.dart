@@ -15,6 +15,16 @@ class ApiConstants {
     defaultValue: 'iot-backend.cianus.space',
   );
 
+  static const String mqttUser = String.fromEnvironment(
+    'MQTT_USER',
+    defaultValue: 'esp32',
+  );
+
+  static const String mqttPassword = String.fromEnvironment(
+    'MQTT_PASSWORD',
+    defaultValue: '',
+  );
+
   // Auth
   static const String register = '/auth/register';
   static const String login = '/auth/login';

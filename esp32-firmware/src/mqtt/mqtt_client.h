@@ -17,7 +17,8 @@ class MqttClient {
 public:
   static MqttClient& instance();
 
-  void begin(const String& deviceId, const String& broker, uint16_t port = 1883);
+  void begin(const String& deviceId, const String& broker, uint16_t port = 1883,
+             const String& user = "", const String& password = "");
   void loop();
   bool connected();
 
@@ -57,6 +58,8 @@ private:
   String        _deviceId;
   String        _broker;
   uint16_t      _port = 1883;
+  String        _user;
+  String        _password;
   bool          _started = false;
   unsigned long _lastReconnectAttempt = 0;
 

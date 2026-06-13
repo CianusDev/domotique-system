@@ -19,6 +19,12 @@ services:
     image: eclipse-mosquitto:2
     container_name: domotique-mqtt
     restart: always
+    entrypoint: >
+      sh -c "mosquitto_passwd -c -b /mosquitto/config/passwd $$MQTT_USER $$MQTT_PASSWORD
+      && exec mosquitto -c /mosquitto/config/mosquitto.conf"
+    environment:
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
     ports:
       - '1883:1883'
       - '9001:9001'
@@ -44,7 +50,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       GMAIL_USER: ${GMAIL_USER}
       GMAIL_PASS: ${GMAIL_PASS}
-      MQTT_BROKER_URL: mqtt://mosquitto:1883
+      MQTT_BROKER_URL: mqtt://${MQTT_USER}:${MQTT_PASSWORD}@mosquitto:1883
     depends_on:
       postgres:
         condition: service_healthy

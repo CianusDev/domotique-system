@@ -437,6 +437,8 @@ class _AddDeviceSheetState extends ConsumerState<AddDeviceSheet> {
         'ssid': ssid,
         'password': password,
         'mqttBroker': ApiConstants.mqttBroker,
+        'mqttUser': ApiConstants.mqttUser,
+        'mqttPassword': ApiConstants.mqttPassword,
         'deviceId': created.id,
       });
 

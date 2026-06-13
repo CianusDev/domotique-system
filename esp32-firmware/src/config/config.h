@@ -21,6 +21,8 @@ public:
   // MQTT
   String mqttBroker;
   uint16_t mqttPort = 1883;
+  String mqttUser;
+  String mqttPassword;
 
   // Device identity
   String deviceId; // UUID assigned by backend

@@ -7,11 +7,14 @@ MqttClient& MqttClient::instance() {
   return inst;
 }
 
-void MqttClient::begin(const String& deviceId, const String& broker, uint16_t port) {
-  _deviceId = deviceId;
-  _broker   = broker;
-  _port     = port;
-  _started  = true;
+void MqttClient::begin(const String& deviceId, const String& broker, uint16_t port,
+                       const String& user, const String& password) {
+  _deviceId  = deviceId;
+  _broker    = broker;
+  _port      = port;
+  _user      = user;
+  _password  = password;
+  _started   = true;
 
   _client.setServer(broker.c_str(), port);
   _client.setCallback(staticCallback);
@@ -43,8 +46,11 @@ void MqttClient::tryReconnect() {
   Serial.print("[MQTT] Connecting...");
   String clientId = "esp32-" + _deviceId;
 
+  const char* user = _user.isEmpty()     ? nullptr : _user.c_str();
+  const char* pass = _password.isEmpty() ? nullptr : _password.c_str();
+
   bool ok = _client.connect(
-    clientId.c_str(), nullptr, nullptr,
+    clientId.c_str(), user, pass,
     ("home/" + _deviceId + "/status").c_str(),
     0, true, "offline"
   );
